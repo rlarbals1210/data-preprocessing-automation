@@ -43,7 +43,6 @@ select = ["E4", "E7", "E9", "F", "B", "I", "UP"]
 [tool.ruff.lint.per-file-ignores]
 # 기존 코드는 M0-4 회귀 기준(T-01)을 만들기 전에 고치지 않는다.
 # 해당 파일을 수정하는 작업에서 이 목록의 그 파일 항목을 지우고 정리한다.
-"diagnostics/classification.py" = ["E701", "E702", "E401", "E402", "I001", "F401", "UP017", "B904", "B905"]
 "diagnostics/cleaning.py" = ["E701", "E702", "E401", "E402", "I001", "F401", "UP017", "B904", "B905"]
 "tests/test_classification.py" = ["E701", "E702", "I001"]
 "tests/test_cleaning.py" = ["E701", "E702", "I001", "F841"]

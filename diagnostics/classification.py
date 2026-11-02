@@ -1,8 +1,8 @@
 """Policy-driven presentation; suggestions never mutate input values."""
-from collections import Counter, defaultdict
+import re
+from collections import Counter
 from datetime import datetime
 from decimal import Decimal
-import re
 
 CATEGORIES = {
     'normal_observation': '정상 관측',
