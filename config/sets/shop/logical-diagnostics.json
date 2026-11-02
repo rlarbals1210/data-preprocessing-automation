@@ -1,0 +1,929 @@
+{
+  "version": 1,
+  "tables": {
+    "customers": {
+      "columns": {
+        "customer_id": {
+          "required": true,
+          "type": "string"
+        },
+        "customer_name": {
+          "required": true,
+          "type": "string",
+          "strip": true
+        },
+        "email": {
+          "required": false,
+          "type": "string",
+          "pattern": "[^\\s@]+@[^\\s@]+\\.[^\\s@]+",
+          "missing_values": [
+            "NULL",
+            "없음",
+            "N/A"
+          ]
+        },
+        "phone": {
+          "required": false,
+          "type": "string",
+          "pattern": "010-[0-9]{4}-[0-9]{4}",
+          "missing_values": [
+            "NULL",
+            "없음",
+            "N/A"
+          ],
+          "standardization": "kr_mobile"
+        },
+        "customer_status": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "active",
+            "inactive",
+            "withdrawn"
+          ],
+          "casefold": true
+        },
+        "marketing_consent": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "true",
+            "false",
+            "unknown"
+          ],
+          "casefold": true
+        },
+        "joined_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "updated_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "customer_id"
+        ]
+      ],
+      "references": []
+    },
+    "customer_addresses": {
+      "columns": {
+        "address_id": {
+          "required": true,
+          "type": "string"
+        },
+        "customer_id": {
+          "required": true,
+          "type": "string"
+        },
+        "address_label": {
+          "required": true,
+          "type": "string"
+        },
+        "recipient_name": {
+          "required": true,
+          "type": "string"
+        },
+        "recipient_phone": {
+          "required": true,
+          "type": "string",
+          "pattern": "010-[0-9]{4}-[0-9]{4}",
+          "standardization": "kr_mobile"
+        },
+        "postal_code": {
+          "required": true,
+          "type": "string",
+          "pattern": "[0-9]{5}"
+        },
+        "address_line1": {
+          "required": true,
+          "type": "string"
+        },
+        "address_line2": {
+          "required": false,
+          "type": "string",
+          "missing_values": [
+            "NULL",
+            "없음",
+            "N/A"
+          ]
+        },
+        "is_default": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "true",
+            "false"
+          ],
+          "casefold": true
+        },
+        "created_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "updated_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "address_id"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "customer_id"
+          ],
+          "table": "customers",
+          "target_columns": [
+            "customer_id"
+          ]
+        }
+      ]
+    },
+    "categories": {
+      "columns": {
+        "category_id": {
+          "required": true,
+          "type": "string"
+        },
+        "parent_category_id": {
+          "required": false,
+          "type": "string"
+        },
+        "category_name": {
+          "required": true,
+          "type": "string"
+        },
+        "is_active": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "true",
+            "false"
+          ],
+          "casefold": true
+        }
+      },
+      "unique": [
+        [
+          "category_id"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "parent_category_id"
+          ],
+          "table": "categories",
+          "target_columns": [
+            "category_id"
+          ]
+        }
+      ]
+    },
+    "products": {
+      "columns": {
+        "product_id": {
+          "required": true,
+          "type": "string"
+        },
+        "category_id": {
+          "required": true,
+          "type": "string"
+        },
+        "product_name": {
+          "required": true,
+          "type": "string",
+          "strip": true
+        },
+        "brand_name": {
+          "required": true,
+          "type": "string",
+          "strip": true
+        },
+        "description": {
+          "required": false,
+          "type": "string"
+        },
+        "product_status": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "draft",
+            "active",
+            "discontinued"
+          ],
+          "casefold": true
+        },
+        "created_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "updated_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "product_id"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "category_id"
+          ],
+          "table": "categories",
+          "target_columns": [
+            "category_id"
+          ]
+        }
+      ]
+    },
+    "product_variants": {
+      "columns": {
+        "sku_id": {
+          "required": true,
+          "type": "string"
+        },
+        "product_id": {
+          "required": true,
+          "type": "string"
+        },
+        "option_name": {
+          "required": true,
+          "type": "string"
+        },
+        "barcode": {
+          "required": false,
+          "type": "string"
+        },
+        "current_price": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "weight_g": {
+          "required": false,
+          "type": "integer",
+          "min": 1
+        },
+        "variant_status": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "active",
+            "out_of_stock",
+            "discontinued"
+          ],
+          "casefold": true
+        },
+        "created_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "updated_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "sku_id"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "product_id"
+          ],
+          "table": "products",
+          "target_columns": [
+            "product_id"
+          ]
+        }
+      ]
+    },
+    "orders": {
+      "columns": {
+        "order_id": {
+          "required": true,
+          "type": "string"
+        },
+        "customer_id": {
+          "required": true,
+          "type": "string"
+        },
+        "ordered_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "order_channel": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "web",
+            "mobile_app",
+            "manual"
+          ],
+          "casefold": true
+        },
+        "order_status": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "pending_payment",
+            "paid",
+            "processing",
+            "completed",
+            "cancelled"
+          ],
+          "casefold": true
+        },
+        "recipient_name": {
+          "required": true,
+          "type": "string"
+        },
+        "recipient_phone": {
+          "required": true,
+          "type": "string",
+          "pattern": "010-[0-9]{4}-[0-9]{4}",
+          "standardization": "kr_mobile"
+        },
+        "postal_code": {
+          "required": true,
+          "type": "string",
+          "pattern": "[0-9]{5}"
+        },
+        "address_line1": {
+          "required": true,
+          "type": "string"
+        },
+        "address_line2": {
+          "required": false,
+          "type": "string",
+          "missing_values": [
+            "NULL",
+            "없음",
+            "N/A"
+          ]
+        },
+        "delivery_memo": {
+          "required": false,
+          "type": "string",
+          "missing_values": [
+            "NULL",
+            "없음",
+            "N/A"
+          ]
+        },
+        "shipping_fee": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "order_total": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "cancelled_at": {
+          "required": false,
+          "type": "datetime",
+          "required_if": {
+            "column": "order_status",
+            "in": [
+              "cancelled"
+            ]
+          },
+          "standardization": "iso_datetime"
+        },
+        "updated_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "order_id"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "customer_id"
+          ],
+          "table": "customers",
+          "target_columns": [
+            "customer_id"
+          ]
+        }
+      ]
+    },
+    "order_items": {
+      "columns": {
+        "order_item_id": {
+          "required": true,
+          "type": "string"
+        },
+        "order_id": {
+          "required": true,
+          "type": "string"
+        },
+        "sku_id": {
+          "required": true,
+          "type": "string"
+        },
+        "product_name_snapshot": {
+          "required": true,
+          "type": "string"
+        },
+        "option_name_snapshot": {
+          "required": true,
+          "type": "string"
+        },
+        "quantity": {
+          "required": true,
+          "type": "integer",
+          "min": 1
+        },
+        "unit_price": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "discount_amount": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "line_total": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        }
+      },
+      "unique": [
+        [
+          "order_item_id"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "order_id"
+          ],
+          "table": "orders",
+          "target_columns": [
+            "order_id"
+          ]
+        },
+        {
+          "columns": [
+            "sku_id"
+          ],
+          "table": "product_variants",
+          "target_columns": [
+            "sku_id"
+          ]
+        }
+      ]
+    },
+    "payments": {
+      "columns": {
+        "payment_id": {
+          "required": true,
+          "type": "string"
+        },
+        "order_id": {
+          "required": true,
+          "type": "string"
+        },
+        "payment_method": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "card",
+            "bank_transfer",
+            "easy_pay"
+          ],
+          "casefold": true
+        },
+        "payment_status": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "pending",
+            "succeeded",
+            "failed",
+            "cancelled"
+          ],
+          "casefold": true
+        },
+        "amount": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "requested_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "paid_at": {
+          "required": false,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "failure_code": {
+          "required": false,
+          "type": "string"
+        }
+      },
+      "unique": [
+        [
+          "payment_id"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "order_id"
+          ],
+          "table": "orders",
+          "target_columns": [
+            "order_id"
+          ]
+        }
+      ]
+    },
+    "shipments": {
+      "columns": {
+        "shipment_id": {
+          "required": true,
+          "type": "string"
+        },
+        "order_id": {
+          "required": true,
+          "type": "string"
+        },
+        "carrier_code": {
+          "required": false,
+          "type": "string"
+        },
+        "tracking_number": {
+          "required": false,
+          "type": "string"
+        },
+        "shipment_status": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "preparing",
+            "shipped",
+            "delivered",
+            "cancelled"
+          ],
+          "casefold": true
+        },
+        "created_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "shipped_at": {
+          "required": false,
+          "type": "datetime",
+          "required_if": {
+            "column": "shipment_status",
+            "in": [
+              "shipped",
+              "delivered"
+            ]
+          },
+          "standardization": "iso_datetime"
+        },
+        "delivered_at": {
+          "required": false,
+          "type": "datetime",
+          "required_if": {
+            "column": "shipment_status",
+            "in": [
+              "delivered"
+            ]
+          },
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "shipment_id"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "order_id"
+          ],
+          "table": "orders",
+          "target_columns": [
+            "order_id"
+          ]
+        }
+      ]
+    },
+    "shipment_items": {
+      "columns": {
+        "shipment_item_id": {
+          "required": true,
+          "type": "string"
+        },
+        "shipment_id": {
+          "required": true,
+          "type": "string"
+        },
+        "order_item_id": {
+          "required": true,
+          "type": "string"
+        },
+        "quantity": {
+          "required": true,
+          "type": "integer",
+          "min": 1
+        }
+      },
+      "unique": [
+        [
+          "shipment_item_id"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "shipment_id"
+          ],
+          "table": "shipments",
+          "target_columns": [
+            "shipment_id"
+          ]
+        },
+        {
+          "columns": [
+            "order_item_id"
+          ],
+          "table": "order_items",
+          "target_columns": [
+            "order_item_id"
+          ]
+        }
+      ]
+    },
+    "returns": {
+      "columns": {
+        "return_id": {
+          "required": true,
+          "type": "string"
+        },
+        "order_id": {
+          "required": true,
+          "type": "string"
+        },
+        "return_status": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "requested",
+            "approved",
+            "rejected",
+            "received",
+            "closed",
+            "cancelled"
+          ],
+          "casefold": true
+        },
+        "requested_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "received_at": {
+          "required": false,
+          "type": "datetime",
+          "required_if": {
+            "column": "return_status",
+            "in": [
+              "received",
+              "closed"
+            ]
+          },
+          "standardization": "iso_datetime"
+        },
+        "closed_at": {
+          "required": false,
+          "type": "datetime",
+          "required_if": {
+            "column": "return_status",
+            "in": [
+              "closed",
+              "rejected",
+              "cancelled"
+            ]
+          },
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "return_id"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "order_id"
+          ],
+          "table": "orders",
+          "target_columns": [
+            "order_id"
+          ]
+        }
+      ]
+    },
+    "return_items": {
+      "columns": {
+        "return_item_id": {
+          "required": true,
+          "type": "string"
+        },
+        "return_id": {
+          "required": true,
+          "type": "string"
+        },
+        "shipment_item_id": {
+          "required": true,
+          "type": "string"
+        },
+        "quantity": {
+          "required": true,
+          "type": "integer",
+          "min": 1
+        },
+        "reason_code": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "damaged",
+            "wrong_item",
+            "changed_mind",
+            "other"
+          ],
+          "casefold": true
+        },
+        "reason_detail": {
+          "required": false,
+          "type": "string"
+        },
+        "item_condition": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "unopened",
+            "opened",
+            "damaged",
+            "unknown"
+          ],
+          "casefold": true
+        }
+      },
+      "unique": [
+        [
+          "return_item_id"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "return_id"
+          ],
+          "table": "returns",
+          "target_columns": [
+            "return_id"
+          ]
+        },
+        {
+          "columns": [
+            "shipment_item_id"
+          ],
+          "table": "shipment_items",
+          "target_columns": [
+            "shipment_item_id"
+          ]
+        }
+      ]
+    },
+    "refunds": {
+      "columns": {
+        "refund_id": {
+          "required": true,
+          "type": "string"
+        },
+        "payment_id": {
+          "required": true,
+          "type": "string"
+        },
+        "return_id": {
+          "required": false,
+          "type": "string"
+        },
+        "refund_type": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "order_cancellation",
+            "return"
+          ],
+          "casefold": true
+        },
+        "refund_status": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "pending",
+            "succeeded",
+            "failed"
+          ],
+          "casefold": true
+        },
+        "amount": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "requested_at": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "refunded_at": {
+          "required": false,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "failure_code": {
+          "required": false,
+          "type": "string"
+        }
+      },
+      "unique": [
+        [
+          "refund_id"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "payment_id"
+          ],
+          "table": "payments",
+          "target_columns": [
+            "payment_id"
+          ]
+        },
+        {
+          "columns": [
+            "return_id"
+          ],
+          "table": "returns",
+          "target_columns": [
+            "return_id"
+          ]
+        }
+      ]
+    }
+  }
+}

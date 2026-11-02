@@ -1,0 +1,178 @@
+{
+  "version": 1,
+  "source_config": "config/shop-diagnostics.json",
+  "basis": "개발용 한글 헤더와 schema.json 필드를 순서·설명으로 대조해 작성(2026-11-02). 평가 입력·정답은 사용하지 않음.",
+  "tables": {
+    "customers": {
+      "table": "customers",
+      "columns": {
+        "고객번호": "customer_id",
+        "고객명": "customer_name",
+        "이메일": "email",
+        "휴대폰": "phone",
+        "회원상태": "customer_status",
+        "마케팅동의": "marketing_consent",
+        "가입일시": "joined_at",
+        "수정일시": "updated_at"
+      }
+    },
+    "customer_addresses": {
+      "table": "customer_addresses",
+      "columns": {
+        "주소번호": "address_id",
+        "고객번호": "customer_id",
+        "배송지별칭": "address_label",
+        "받는분": "recipient_name",
+        "수령인연락처": "recipient_phone",
+        "우편번호": "postal_code",
+        "기본주소": "address_line1",
+        "상세주소": "address_line2",
+        "기본배송지": "is_default",
+        "등록일시": "created_at",
+        "수정일시": "updated_at"
+      }
+    },
+    "categories": {
+      "table": "categories",
+      "columns": {
+        "분류번호": "category_id",
+        "상위분류번호": "parent_category_id",
+        "분류명": "category_name",
+        "사용여부": "is_active"
+      }
+    },
+    "products": {
+      "table": "products",
+      "columns": {
+        "상품번호": "product_id",
+        "분류번호": "category_id",
+        "상품명": "product_name",
+        "브랜드": "brand_name",
+        "상품설명": "description",
+        "상품상태": "product_status",
+        "등록일시": "created_at",
+        "수정일시": "updated_at"
+      }
+    },
+    "product_variants": {
+      "table": "product_variants",
+      "columns": {
+        "옵션코드": "sku_id",
+        "상품번호": "product_id",
+        "옵션명": "option_name",
+        "바코드": "barcode",
+        "판매가": "current_price",
+        "무게_g": "weight_g",
+        "판매상태": "variant_status",
+        "등록일시": "created_at",
+        "수정일시": "updated_at"
+      }
+    },
+    "orders": {
+      "table": "orders",
+      "columns": {
+        "주문번호": "order_id",
+        "고객번호": "customer_id",
+        "주문일시": "ordered_at",
+        "주문경로": "order_channel",
+        "주문상태": "order_status",
+        "받는분": "recipient_name",
+        "수령인연락처": "recipient_phone",
+        "우편번호": "postal_code",
+        "기본주소": "address_line1",
+        "상세주소": "address_line2",
+        "배송요청": "delivery_memo",
+        "배송비": "shipping_fee",
+        "주문총액": "order_total",
+        "취소일시": "cancelled_at",
+        "수정일시": "updated_at"
+      }
+    },
+    "order_items": {
+      "table": "order_items",
+      "columns": {
+        "주문상세번호": "order_item_id",
+        "주문번호": "order_id",
+        "옵션코드": "sku_id",
+        "주문상품명": "product_name_snapshot",
+        "주문옵션명": "option_name_snapshot",
+        "수량": "quantity",
+        "단가": "unit_price",
+        "할인액": "discount_amount",
+        "항목금액": "line_total"
+      }
+    },
+    "payments": {
+      "table": "payments",
+      "columns": {
+        "결제번호": "payment_id",
+        "주문번호": "order_id",
+        "결제수단": "payment_method",
+        "결제상태": "payment_status",
+        "금액": "amount",
+        "요청일시": "requested_at",
+        "결제일시": "paid_at",
+        "실패코드": "failure_code"
+      }
+    },
+    "shipments": {
+      "table": "shipments",
+      "columns": {
+        "출고번호": "shipment_id",
+        "주문번호": "order_id",
+        "택배사": "carrier_code",
+        "송장번호": "tracking_number",
+        "배송상태": "shipment_status",
+        "등록일시": "created_at",
+        "출고일시": "shipped_at",
+        "배송완료일시": "delivered_at"
+      }
+    },
+    "shipment_items": {
+      "table": "shipment_items",
+      "columns": {
+        "출고상세번호": "shipment_item_id",
+        "출고번호": "shipment_id",
+        "주문상세번호": "order_item_id",
+        "수량": "quantity"
+      }
+    },
+    "returns": {
+      "table": "returns",
+      "columns": {
+        "반품번호": "return_id",
+        "주문번호": "order_id",
+        "반품상태": "return_status",
+        "요청일시": "requested_at",
+        "입고일시": "received_at",
+        "종료일시": "closed_at"
+      }
+    },
+    "return_items": {
+      "table": "return_items",
+      "columns": {
+        "반품상세번호": "return_item_id",
+        "반품번호": "return_id",
+        "출고상세번호": "shipment_item_id",
+        "수량": "quantity",
+        "반품사유코드": "reason_code",
+        "상세사유": "reason_detail",
+        "물품상태": "item_condition"
+      }
+    },
+    "refunds": {
+      "table": "refunds",
+      "columns": {
+        "환불번호": "refund_id",
+        "결제번호": "payment_id",
+        "반품번호": "return_id",
+        "환불유형": "refund_type",
+        "환불상태": "refund_status",
+        "금액": "amount",
+        "요청일시": "requested_at",
+        "환불일시": "refunded_at",
+        "실패코드": "failure_code"
+      }
+    }
+  }
+}
