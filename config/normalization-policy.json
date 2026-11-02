@@ -1,0 +1,12 @@
+{
+  "version": "1.0.0",
+  "scope": "Synthetic benchmark normalization policy; approve before applying",
+  "phone": "한국 휴대전화는 010-XXXX-XXXX. 공백·하이픈·괄호·명시적 +82 국가코드만 정리. 11자리 복원 추측 금지.",
+  "null": "nullable 고객 phone/email/주소상세/메모에 한해 빈칸, NULL, 없음, N/A를 null로 통일. phone의 0·미확인은 의미 불확실로 검토. 금액 0은 정상.",
+  "money": "KRW 정수. 쉼표·원·₩ 표기는 숫자값 보존하여 정리.",
+  "datetime": "시간대 +09:00이 명시되고 연-월-일 순서가 명확한 표현만 ISO로 통일. 07/08/26 같은 모호한 날짜는 검토.",
+  "whitespace": "customer_name/product_name/brand_name의 바깥 공백만 제거.",
+  "enum": "명시된 스키마 범주와 대소문자만 다른 값은 소문자로 통일.",
+  "review": "필수값 결측, 불완전 전화, 수량 0, 미존재 FK, 금액 모순, 중복 PK는 원문 유지·검토 요청. 행 삭제·병합·원값 추측 금지.",
+  "mapping": "컬럼명 매핑은 일대일 대응 확인 후 승인. 정답 매핑 파일은 서비스 입력 금지."
+}

@@ -1,0 +1,75 @@
+{
+  "schema_version": "1.0.0",
+  "seed": 20261015,
+  "orders_from": "2026-07-01",
+  "orders_to": "2026-09-30",
+  "snapshot_at": "2026-10-15T00:00:00+09:00",
+  "synthetic": true,
+  "files": {
+    "customers": {
+      "rows": 300,
+      "columns": 8,
+      "sha256": "07e4c93eaa1226b32c5ccc877467299d51006e2a363f4917a620cab960814340"
+    },
+    "customer_addresses": {
+      "rows": 450,
+      "columns": 11,
+      "sha256": "73933be895ce21b515967b259871e0eeeecb367c0f6b72b71ff525c51ee14eee"
+    },
+    "categories": {
+      "rows": 15,
+      "columns": 4,
+      "sha256": "7775ed998025918ed1195cd78fe0857e0b0a4c42edfc5c7592db7262f1a9553b"
+    },
+    "products": {
+      "rows": 100,
+      "columns": 8,
+      "sha256": "f0d72651ff5b4f328c93a5b62fffb174030777e129df4e57fc7f73f2bc72018a"
+    },
+    "product_variants": {
+      "rows": 200,
+      "columns": 9,
+      "sha256": "bfe688fcc48854659775f4bd1044ec5d69f65807b18d53f7a99eff098615512b"
+    },
+    "orders": {
+      "rows": 1000,
+      "columns": 15,
+      "sha256": "ed3196cbce5eb4953284d131ad7d47464e6f6c3acff8c20b3f88fb720ac45d0d"
+    },
+    "order_items": {
+      "rows": 2500,
+      "columns": 9,
+      "sha256": "c5314d7d8943dcca2a774aaceff36a471e5c927b5229accf8a2ac996ffb834cb"
+    },
+    "payments": {
+      "rows": 1100,
+      "columns": 8,
+      "sha256": "22b0a816ab06bd7b10a5f0488f2828b8a541e28a9a1aba6b0fb7cf180c011807"
+    },
+    "shipments": {
+      "rows": 986,
+      "columns": 8,
+      "sha256": "4969cc70c026c5a34641ed200560b12699019e1ede54567833c6386e2a0980b9"
+    },
+    "shipment_items": {
+      "rows": 2381,
+      "columns": 4,
+      "sha256": "c8ef7340234117b1ed62c610e6e4826e2b206fc935484cfd5494b981a13c7ab6"
+    },
+    "returns": {
+      "rows": 60,
+      "columns": 6,
+      "sha256": "6f15553f8f00021626eebe77109c8f00718ebc29fb00663a9a9604c70ba4c0ff"
+    },
+    "return_items": {
+      "rows": 80,
+      "columns": 7,
+      "sha256": "fd2f29e63545aef890969a6c94fb4a559777167ffd72c333259c241c322eb659"
+    },
+    "refunds": {
+      "rows": 70,
+      "columns": 9,
+      "sha256": "789649a043eb1851ad90357b93e922be626d76fca1305f91b7ec7ea6381c0a40"
+    }
+  }
+}

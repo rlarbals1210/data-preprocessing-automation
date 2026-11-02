@@ -1,0 +1,966 @@
+{
+  "version": "1.0.0",
+  "timezone": "Asia/Seoul",
+  "timestamp_format": "YYYY-MM-DDTHH:mm:ss+09:00",
+  "currency": "KRW",
+  "null_encoding": "empty field",
+  "tables": {
+    "customers": {
+      "grain": "회원 1명",
+      "fields": [
+        {
+          "name": "customer_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": true,
+          "description": "고객 식별자"
+        },
+        {
+          "name": "customer_name",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "가상 고객명"
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "description": "이메일"
+        },
+        {
+          "name": "phone",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "description": "고객 연락처"
+        },
+        {
+          "name": "customer_status",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "active",
+            "inactive",
+            "withdrawn"
+          ],
+          "description": "고객 상태"
+        },
+        {
+          "name": "marketing_consent",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "true",
+            "false",
+            "unknown"
+          ],
+          "description": "마케팅 동의·거부·미확인"
+        },
+        {
+          "name": "joined_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "가입 시각"
+        },
+        {
+          "name": "updated_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "마지막 수정 시각"
+        }
+      ]
+    },
+    "customer_addresses": {
+      "grain": "고객 저장 배송지 1개",
+      "fields": [
+        {
+          "name": "address_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": true,
+          "description": "저장 배송지 식별자"
+        },
+        {
+          "name": "customer_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "customers",
+            "column": "customer_id"
+          },
+          "description": "고객 식별자"
+        },
+        {
+          "name": "address_label",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "배송지 별칭"
+        },
+        {
+          "name": "recipient_name",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "수령인"
+        },
+        {
+          "name": "recipient_phone",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "수령인 연락처"
+        },
+        {
+          "name": "postal_code",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "우편번호"
+        },
+        {
+          "name": "address_line1",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "기본 주소"
+        },
+        {
+          "name": "address_line2",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "description": "상세 주소"
+        },
+        {
+          "name": "is_default",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "true",
+            "false"
+          ],
+          "description": "기본 배송지 여부"
+        },
+        {
+          "name": "created_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "생성 시각"
+        },
+        {
+          "name": "updated_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "마지막 수정 시각"
+        }
+      ]
+    },
+    "categories": {
+      "grain": "카테고리 1개",
+      "fields": [
+        {
+          "name": "category_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": true,
+          "description": "카테고리 식별자"
+        },
+        {
+          "name": "parent_category_id",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "references": {
+            "table": "categories",
+            "column": "category_id"
+          },
+          "description": "상위 카테고리"
+        },
+        {
+          "name": "category_name",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "카테고리명"
+        },
+        {
+          "name": "is_active",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "true",
+            "false"
+          ],
+          "description": "활성 여부"
+        }
+      ]
+    },
+    "products": {
+      "grain": "상품 1개",
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": true,
+          "description": "상품 식별자"
+        },
+        {
+          "name": "category_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "categories",
+            "column": "category_id"
+          },
+          "description": "카테고리 식별자"
+        },
+        {
+          "name": "product_name",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "상품명"
+        },
+        {
+          "name": "brand_name",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "브랜드명"
+        },
+        {
+          "name": "description",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "description": "상품 설명"
+        },
+        {
+          "name": "product_status",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "draft",
+            "active",
+            "discontinued"
+          ],
+          "description": "상품 상태"
+        },
+        {
+          "name": "created_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "생성 시각"
+        },
+        {
+          "name": "updated_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "마지막 수정 시각"
+        }
+      ]
+    },
+    "product_variants": {
+      "grain": "판매 옵션 SKU 1개",
+      "fields": [
+        {
+          "name": "sku_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": true,
+          "description": "판매 옵션 식별자"
+        },
+        {
+          "name": "product_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "products",
+            "column": "product_id"
+          },
+          "description": "상품 식별자"
+        },
+        {
+          "name": "option_name",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "옵션 이름"
+        },
+        {
+          "name": "barcode",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "description": "가상 바코드 식별 문자열; GS1 체크섬 검증 대상 아님"
+        },
+        {
+          "name": "current_price",
+          "type": "integer",
+          "nullable": false,
+          "primary_key": false,
+          "description": "스냅샷 시점 판매가격 KRW"
+        },
+        {
+          "name": "weight_g",
+          "type": "integer",
+          "nullable": true,
+          "primary_key": false,
+          "description": "그램 단위 무게"
+        },
+        {
+          "name": "variant_status",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "active",
+            "out_of_stock",
+            "discontinued"
+          ],
+          "description": "옵션 상태"
+        },
+        {
+          "name": "created_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "생성 시각"
+        },
+        {
+          "name": "updated_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "마지막 수정 시각"
+        }
+      ]
+    },
+    "orders": {
+      "grain": "주문 1건",
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": true,
+          "description": "주문 식별자"
+        },
+        {
+          "name": "customer_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "customers",
+            "column": "customer_id"
+          },
+          "description": "고객 식별자"
+        },
+        {
+          "name": "ordered_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "주문 시각"
+        },
+        {
+          "name": "order_channel",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "web",
+            "mobile_app",
+            "manual"
+          ],
+          "description": "주문 경로"
+        },
+        {
+          "name": "order_status",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "pending_payment",
+            "paid",
+            "processing",
+            "completed",
+            "cancelled"
+          ],
+          "description": "주문 처리 상태; 반품 상태와 별개"
+        },
+        {
+          "name": "recipient_name",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "수령인"
+        },
+        {
+          "name": "recipient_phone",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "수령인 연락처"
+        },
+        {
+          "name": "postal_code",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "우편번호"
+        },
+        {
+          "name": "address_line1",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "기본 주소"
+        },
+        {
+          "name": "address_line2",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "description": "상세 주소"
+        },
+        {
+          "name": "delivery_memo",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "description": "배송 요청사항"
+        },
+        {
+          "name": "shipping_fee",
+          "type": "integer",
+          "nullable": false,
+          "primary_key": false,
+          "description": "최초 주문 배송비 KRW"
+        },
+        {
+          "name": "order_total",
+          "type": "integer",
+          "nullable": false,
+          "primary_key": false,
+          "description": "최초 주문금액 KRW"
+        },
+        {
+          "name": "cancelled_at",
+          "type": "datetime",
+          "nullable": true,
+          "primary_key": false,
+          "description": "전체 취소 시각"
+        },
+        {
+          "name": "updated_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "마지막 수정 시각"
+        }
+      ]
+    },
+    "order_items": {
+      "grain": "주문 상품 항목 1개",
+      "fields": [
+        {
+          "name": "order_item_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": true,
+          "description": "주문 항목 식별자"
+        },
+        {
+          "name": "order_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "orders",
+            "column": "order_id"
+          },
+          "description": "주문 식별자"
+        },
+        {
+          "name": "sku_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "product_variants",
+            "column": "sku_id"
+          },
+          "description": "판매 옵션 식별자"
+        },
+        {
+          "name": "product_name_snapshot",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "주문 당시 상품명"
+        },
+        {
+          "name": "option_name_snapshot",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "description": "주문 당시 옵션명"
+        },
+        {
+          "name": "quantity",
+          "type": "integer",
+          "nullable": false,
+          "primary_key": false,
+          "description": "해당 테이블의 주문·출고·반품 수량"
+        },
+        {
+          "name": "unit_price",
+          "type": "integer",
+          "nullable": false,
+          "primary_key": false,
+          "description": "주문 당시 개당 가격 KRW"
+        },
+        {
+          "name": "discount_amount",
+          "type": "integer",
+          "nullable": false,
+          "primary_key": false,
+          "description": "주문 항목 전체 할인액 KRW"
+        },
+        {
+          "name": "line_total",
+          "type": "integer",
+          "nullable": false,
+          "primary_key": false,
+          "description": "할인 후 항목 금액 KRW"
+        }
+      ]
+    },
+    "payments": {
+      "grain": "결제 시도 1회",
+      "fields": [
+        {
+          "name": "payment_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": true,
+          "description": "결제 시도 식별자"
+        },
+        {
+          "name": "order_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "orders",
+            "column": "order_id"
+          },
+          "description": "주문 식별자"
+        },
+        {
+          "name": "payment_method",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "card",
+            "bank_transfer",
+            "easy_pay"
+          ],
+          "description": "결제 수단"
+        },
+        {
+          "name": "payment_status",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "pending",
+            "succeeded",
+            "failed",
+            "cancelled"
+          ],
+          "description": "결제 시도 상태"
+        },
+        {
+          "name": "amount",
+          "type": "integer",
+          "nullable": false,
+          "primary_key": false,
+          "description": "해당 결제·환불 시도 금액 KRW"
+        },
+        {
+          "name": "requested_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "요청 시각"
+        },
+        {
+          "name": "paid_at",
+          "type": "datetime",
+          "nullable": true,
+          "primary_key": false,
+          "description": "결제 성공 시각"
+        },
+        {
+          "name": "failure_code",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "description": "실패 코드"
+        }
+      ]
+    },
+    "shipments": {
+      "grain": "출고 묶음 1개",
+      "fields": [
+        {
+          "name": "shipment_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": true,
+          "description": "출고 묶음 식별자"
+        },
+        {
+          "name": "order_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "orders",
+            "column": "order_id"
+          },
+          "description": "주문 식별자"
+        },
+        {
+          "name": "carrier_code",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "description": "가상 택배사 코드"
+        },
+        {
+          "name": "tracking_number",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "description": "가상 운송장"
+        },
+        {
+          "name": "shipment_status",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "preparing",
+            "shipped",
+            "delivered",
+            "cancelled"
+          ],
+          "description": "출고·배송 상태"
+        },
+        {
+          "name": "created_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "생성 시각"
+        },
+        {
+          "name": "shipped_at",
+          "type": "datetime",
+          "nullable": true,
+          "primary_key": false,
+          "description": "출고 시각"
+        },
+        {
+          "name": "delivered_at",
+          "type": "datetime",
+          "nullable": true,
+          "primary_key": false,
+          "description": "배송 완료 시각"
+        }
+      ]
+    },
+    "shipment_items": {
+      "grain": "출고 배정 항목 1개",
+      "fields": [
+        {
+          "name": "shipment_item_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": true,
+          "description": "출고 항목 식별자"
+        },
+        {
+          "name": "shipment_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "shipments",
+            "column": "shipment_id"
+          },
+          "description": "출고 묶음 식별자"
+        },
+        {
+          "name": "order_item_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "order_items",
+            "column": "order_item_id"
+          },
+          "description": "주문 항목 식별자"
+        },
+        {
+          "name": "quantity",
+          "type": "integer",
+          "nullable": false,
+          "primary_key": false,
+          "description": "해당 테이블의 주문·출고·반품 수량"
+        }
+      ]
+    },
+    "returns": {
+      "grain": "반품 접수 1건",
+      "fields": [
+        {
+          "name": "return_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": true,
+          "description": "반품 접수 식별자"
+        },
+        {
+          "name": "order_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "orders",
+            "column": "order_id"
+          },
+          "description": "주문 식별자"
+        },
+        {
+          "name": "return_status",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "requested",
+            "approved",
+            "rejected",
+            "received",
+            "closed",
+            "cancelled"
+          ],
+          "description": "반품 처리 상태"
+        },
+        {
+          "name": "requested_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "요청 시각"
+        },
+        {
+          "name": "received_at",
+          "type": "datetime",
+          "nullable": true,
+          "primary_key": false,
+          "description": "반품 입고 시각"
+        },
+        {
+          "name": "closed_at",
+          "type": "datetime",
+          "nullable": true,
+          "primary_key": false,
+          "description": "반품 종료 시각; rejected/cancelled 포함"
+        }
+      ]
+    },
+    "return_items": {
+      "grain": "반품 대상 출고 항목 1개",
+      "fields": [
+        {
+          "name": "return_item_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": true,
+          "description": "반품 항목 식별자"
+        },
+        {
+          "name": "return_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "returns",
+            "column": "return_id"
+          },
+          "description": "반품 접수 식별자"
+        },
+        {
+          "name": "shipment_item_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "shipment_items",
+            "column": "shipment_item_id"
+          },
+          "description": "출고 항목 식별자"
+        },
+        {
+          "name": "quantity",
+          "type": "integer",
+          "nullable": false,
+          "primary_key": false,
+          "description": "해당 테이블의 주문·출고·반품 수량"
+        },
+        {
+          "name": "reason_code",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "damaged",
+            "wrong_item",
+            "changed_mind",
+            "other"
+          ],
+          "description": "반품 사유 분류"
+        },
+        {
+          "name": "reason_detail",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "description": "자유 서술 반품 사유"
+        },
+        {
+          "name": "item_condition",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "unopened",
+            "opened",
+            "damaged",
+            "unknown"
+          ],
+          "description": "반품 물품 상태"
+        }
+      ]
+    },
+    "refunds": {
+      "grain": "환불 시도 1회",
+      "fields": [
+        {
+          "name": "refund_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": true,
+          "description": "환불 시도 식별자"
+        },
+        {
+          "name": "payment_id",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "references": {
+            "table": "payments",
+            "column": "payment_id"
+          },
+          "description": "결제 시도 식별자"
+        },
+        {
+          "name": "return_id",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "references": {
+            "table": "returns",
+            "column": "return_id"
+          },
+          "description": "반품 접수 식별자"
+        },
+        {
+          "name": "refund_type",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "order_cancellation",
+            "return"
+          ],
+          "description": "환불 원인"
+        },
+        {
+          "name": "refund_status",
+          "type": "string",
+          "nullable": false,
+          "primary_key": false,
+          "enum": [
+            "pending",
+            "succeeded",
+            "failed"
+          ],
+          "description": "환불 처리 상태"
+        },
+        {
+          "name": "amount",
+          "type": "integer",
+          "nullable": false,
+          "primary_key": false,
+          "description": "해당 결제·환불 시도 금액 KRW"
+        },
+        {
+          "name": "requested_at",
+          "type": "datetime",
+          "nullable": false,
+          "primary_key": false,
+          "description": "요청 시각"
+        },
+        {
+          "name": "refunded_at",
+          "type": "datetime",
+          "nullable": true,
+          "primary_key": false,
+          "description": "환불 성공 시각"
+        },
+        {
+          "name": "failure_code",
+          "type": "string",
+          "nullable": true,
+          "primary_key": false,
+          "description": "실패 코드"
+        }
+      ]
+    }
+  }
+}

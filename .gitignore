@@ -1,0 +1,27 @@
+node_modules/
+__pycache__/
+.DS_Store
+previews/
+.env
+.env.*
+!.env.example
+
+.venv/
+reports/mysql-csv-comparison*.json
+
+reports/diagnostics/
+
+reports/cleaning/
+
+# 평가 자료 — Git 제외, 개발 중 열람 금지 (docs/development-plan.md 7·8절)
+evaluation_private/
+deliverables/evaluation-answers.zip
+deliverables/service-inputs.zip
+data/clean/
+data/dirty/evaluation/
+
+# 실행 데이터
+workspace/
+
+# 생성 보고서 — 평가 자료에서 만든 것이 섞여 있어 전체 제외 (8절 5)
+reports/

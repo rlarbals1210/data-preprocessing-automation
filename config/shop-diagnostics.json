@@ -1,0 +1,929 @@
+{
+  "version": 1,
+  "tables": {
+    "customers": {
+      "columns": {
+        "고객번호": {
+          "required": true,
+          "type": "string"
+        },
+        "고객명": {
+          "required": true,
+          "type": "string",
+          "strip": true
+        },
+        "이메일": {
+          "required": false,
+          "type": "string",
+          "pattern": "[^\\s@]+@[^\\s@]+\\.[^\\s@]+",
+          "missing_values": [
+            "NULL",
+            "없음",
+            "N/A"
+          ]
+        },
+        "휴대폰": {
+          "required": false,
+          "type": "string",
+          "pattern": "010-[0-9]{4}-[0-9]{4}",
+          "missing_values": [
+            "NULL",
+            "없음",
+            "N/A"
+          ],
+          "standardization": "kr_mobile"
+        },
+        "회원상태": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "active",
+            "inactive",
+            "withdrawn"
+          ],
+          "casefold": true
+        },
+        "마케팅동의": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "true",
+            "false",
+            "unknown"
+          ],
+          "casefold": true
+        },
+        "가입일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "수정일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "고객번호"
+        ]
+      ],
+      "references": []
+    },
+    "customer_addresses": {
+      "columns": {
+        "주소번호": {
+          "required": true,
+          "type": "string"
+        },
+        "고객번호": {
+          "required": true,
+          "type": "string"
+        },
+        "배송지별칭": {
+          "required": true,
+          "type": "string"
+        },
+        "받는분": {
+          "required": true,
+          "type": "string"
+        },
+        "수령인연락처": {
+          "required": true,
+          "type": "string",
+          "pattern": "010-[0-9]{4}-[0-9]{4}",
+          "standardization": "kr_mobile"
+        },
+        "우편번호": {
+          "required": true,
+          "type": "string",
+          "pattern": "[0-9]{5}"
+        },
+        "기본주소": {
+          "required": true,
+          "type": "string"
+        },
+        "상세주소": {
+          "required": false,
+          "type": "string",
+          "missing_values": [
+            "NULL",
+            "없음",
+            "N/A"
+          ]
+        },
+        "기본배송지": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "true",
+            "false"
+          ],
+          "casefold": true
+        },
+        "등록일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "수정일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "주소번호"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "고객번호"
+          ],
+          "table": "customers",
+          "target_columns": [
+            "고객번호"
+          ]
+        }
+      ]
+    },
+    "categories": {
+      "columns": {
+        "분류번호": {
+          "required": true,
+          "type": "string"
+        },
+        "상위분류번호": {
+          "required": false,
+          "type": "string"
+        },
+        "분류명": {
+          "required": true,
+          "type": "string"
+        },
+        "사용여부": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "true",
+            "false"
+          ],
+          "casefold": true
+        }
+      },
+      "unique": [
+        [
+          "분류번호"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "상위분류번호"
+          ],
+          "table": "categories",
+          "target_columns": [
+            "분류번호"
+          ]
+        }
+      ]
+    },
+    "products": {
+      "columns": {
+        "상품번호": {
+          "required": true,
+          "type": "string"
+        },
+        "분류번호": {
+          "required": true,
+          "type": "string"
+        },
+        "상품명": {
+          "required": true,
+          "type": "string",
+          "strip": true
+        },
+        "브랜드": {
+          "required": true,
+          "type": "string",
+          "strip": true
+        },
+        "상품설명": {
+          "required": false,
+          "type": "string"
+        },
+        "상품상태": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "draft",
+            "active",
+            "discontinued"
+          ],
+          "casefold": true
+        },
+        "등록일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "수정일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "상품번호"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "분류번호"
+          ],
+          "table": "categories",
+          "target_columns": [
+            "분류번호"
+          ]
+        }
+      ]
+    },
+    "product_variants": {
+      "columns": {
+        "옵션코드": {
+          "required": true,
+          "type": "string"
+        },
+        "상품번호": {
+          "required": true,
+          "type": "string"
+        },
+        "옵션명": {
+          "required": true,
+          "type": "string"
+        },
+        "바코드": {
+          "required": false,
+          "type": "string"
+        },
+        "판매가": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "무게_g": {
+          "required": false,
+          "type": "integer",
+          "min": 1
+        },
+        "판매상태": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "active",
+            "out_of_stock",
+            "discontinued"
+          ],
+          "casefold": true
+        },
+        "등록일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "수정일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "옵션코드"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "상품번호"
+          ],
+          "table": "products",
+          "target_columns": [
+            "상품번호"
+          ]
+        }
+      ]
+    },
+    "orders": {
+      "columns": {
+        "주문번호": {
+          "required": true,
+          "type": "string"
+        },
+        "고객번호": {
+          "required": true,
+          "type": "string"
+        },
+        "주문일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "주문경로": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "web",
+            "mobile_app",
+            "manual"
+          ],
+          "casefold": true
+        },
+        "주문상태": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "pending_payment",
+            "paid",
+            "processing",
+            "completed",
+            "cancelled"
+          ],
+          "casefold": true
+        },
+        "받는분": {
+          "required": true,
+          "type": "string"
+        },
+        "수령인연락처": {
+          "required": true,
+          "type": "string",
+          "pattern": "010-[0-9]{4}-[0-9]{4}",
+          "standardization": "kr_mobile"
+        },
+        "우편번호": {
+          "required": true,
+          "type": "string",
+          "pattern": "[0-9]{5}"
+        },
+        "기본주소": {
+          "required": true,
+          "type": "string"
+        },
+        "상세주소": {
+          "required": false,
+          "type": "string",
+          "missing_values": [
+            "NULL",
+            "없음",
+            "N/A"
+          ]
+        },
+        "배송요청": {
+          "required": false,
+          "type": "string",
+          "missing_values": [
+            "NULL",
+            "없음",
+            "N/A"
+          ]
+        },
+        "배송비": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "주문총액": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "취소일시": {
+          "required": false,
+          "type": "datetime",
+          "required_if": {
+            "column": "주문상태",
+            "in": [
+              "cancelled"
+            ]
+          },
+          "standardization": "iso_datetime"
+        },
+        "수정일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "주문번호"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "고객번호"
+          ],
+          "table": "customers",
+          "target_columns": [
+            "고객번호"
+          ]
+        }
+      ]
+    },
+    "order_items": {
+      "columns": {
+        "주문상세번호": {
+          "required": true,
+          "type": "string"
+        },
+        "주문번호": {
+          "required": true,
+          "type": "string"
+        },
+        "옵션코드": {
+          "required": true,
+          "type": "string"
+        },
+        "주문상품명": {
+          "required": true,
+          "type": "string"
+        },
+        "주문옵션명": {
+          "required": true,
+          "type": "string"
+        },
+        "수량": {
+          "required": true,
+          "type": "integer",
+          "min": 1
+        },
+        "단가": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "할인액": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "항목금액": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        }
+      },
+      "unique": [
+        [
+          "주문상세번호"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "주문번호"
+          ],
+          "table": "orders",
+          "target_columns": [
+            "주문번호"
+          ]
+        },
+        {
+          "columns": [
+            "옵션코드"
+          ],
+          "table": "product_variants",
+          "target_columns": [
+            "옵션코드"
+          ]
+        }
+      ]
+    },
+    "payments": {
+      "columns": {
+        "결제번호": {
+          "required": true,
+          "type": "string"
+        },
+        "주문번호": {
+          "required": true,
+          "type": "string"
+        },
+        "결제수단": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "card",
+            "bank_transfer",
+            "easy_pay"
+          ],
+          "casefold": true
+        },
+        "결제상태": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "pending",
+            "succeeded",
+            "failed",
+            "cancelled"
+          ],
+          "casefold": true
+        },
+        "금액": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "요청일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "결제일시": {
+          "required": false,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "실패코드": {
+          "required": false,
+          "type": "string"
+        }
+      },
+      "unique": [
+        [
+          "결제번호"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "주문번호"
+          ],
+          "table": "orders",
+          "target_columns": [
+            "주문번호"
+          ]
+        }
+      ]
+    },
+    "shipments": {
+      "columns": {
+        "출고번호": {
+          "required": true,
+          "type": "string"
+        },
+        "주문번호": {
+          "required": true,
+          "type": "string"
+        },
+        "택배사": {
+          "required": false,
+          "type": "string"
+        },
+        "송장번호": {
+          "required": false,
+          "type": "string"
+        },
+        "배송상태": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "preparing",
+            "shipped",
+            "delivered",
+            "cancelled"
+          ],
+          "casefold": true
+        },
+        "등록일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "출고일시": {
+          "required": false,
+          "type": "datetime",
+          "required_if": {
+            "column": "배송상태",
+            "in": [
+              "shipped",
+              "delivered"
+            ]
+          },
+          "standardization": "iso_datetime"
+        },
+        "배송완료일시": {
+          "required": false,
+          "type": "datetime",
+          "required_if": {
+            "column": "배송상태",
+            "in": [
+              "delivered"
+            ]
+          },
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "출고번호"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "주문번호"
+          ],
+          "table": "orders",
+          "target_columns": [
+            "주문번호"
+          ]
+        }
+      ]
+    },
+    "shipment_items": {
+      "columns": {
+        "출고상세번호": {
+          "required": true,
+          "type": "string"
+        },
+        "출고번호": {
+          "required": true,
+          "type": "string"
+        },
+        "주문상세번호": {
+          "required": true,
+          "type": "string"
+        },
+        "수량": {
+          "required": true,
+          "type": "integer",
+          "min": 1
+        }
+      },
+      "unique": [
+        [
+          "출고상세번호"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "출고번호"
+          ],
+          "table": "shipments",
+          "target_columns": [
+            "출고번호"
+          ]
+        },
+        {
+          "columns": [
+            "주문상세번호"
+          ],
+          "table": "order_items",
+          "target_columns": [
+            "주문상세번호"
+          ]
+        }
+      ]
+    },
+    "returns": {
+      "columns": {
+        "반품번호": {
+          "required": true,
+          "type": "string"
+        },
+        "주문번호": {
+          "required": true,
+          "type": "string"
+        },
+        "반품상태": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "requested",
+            "approved",
+            "rejected",
+            "received",
+            "closed",
+            "cancelled"
+          ],
+          "casefold": true
+        },
+        "요청일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "입고일시": {
+          "required": false,
+          "type": "datetime",
+          "required_if": {
+            "column": "반품상태",
+            "in": [
+              "received",
+              "closed"
+            ]
+          },
+          "standardization": "iso_datetime"
+        },
+        "종료일시": {
+          "required": false,
+          "type": "datetime",
+          "required_if": {
+            "column": "반품상태",
+            "in": [
+              "closed",
+              "rejected",
+              "cancelled"
+            ]
+          },
+          "standardization": "iso_datetime"
+        }
+      },
+      "unique": [
+        [
+          "반품번호"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "주문번호"
+          ],
+          "table": "orders",
+          "target_columns": [
+            "주문번호"
+          ]
+        }
+      ]
+    },
+    "return_items": {
+      "columns": {
+        "반품상세번호": {
+          "required": true,
+          "type": "string"
+        },
+        "반품번호": {
+          "required": true,
+          "type": "string"
+        },
+        "출고상세번호": {
+          "required": true,
+          "type": "string"
+        },
+        "수량": {
+          "required": true,
+          "type": "integer",
+          "min": 1
+        },
+        "반품사유코드": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "damaged",
+            "wrong_item",
+            "changed_mind",
+            "other"
+          ],
+          "casefold": true
+        },
+        "상세사유": {
+          "required": false,
+          "type": "string"
+        },
+        "물품상태": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "unopened",
+            "opened",
+            "damaged",
+            "unknown"
+          ],
+          "casefold": true
+        }
+      },
+      "unique": [
+        [
+          "반품상세번호"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "반품번호"
+          ],
+          "table": "returns",
+          "target_columns": [
+            "반품번호"
+          ]
+        },
+        {
+          "columns": [
+            "출고상세번호"
+          ],
+          "table": "shipment_items",
+          "target_columns": [
+            "출고상세번호"
+          ]
+        }
+      ]
+    },
+    "refunds": {
+      "columns": {
+        "환불번호": {
+          "required": true,
+          "type": "string"
+        },
+        "결제번호": {
+          "required": true,
+          "type": "string"
+        },
+        "반품번호": {
+          "required": false,
+          "type": "string"
+        },
+        "환불유형": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "order_cancellation",
+            "return"
+          ],
+          "casefold": true
+        },
+        "환불상태": {
+          "required": true,
+          "type": "string",
+          "allowed": [
+            "pending",
+            "succeeded",
+            "failed"
+          ],
+          "casefold": true
+        },
+        "금액": {
+          "required": true,
+          "type": "integer",
+          "min": 0,
+          "standardization": "krw_integer"
+        },
+        "요청일시": {
+          "required": true,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "환불일시": {
+          "required": false,
+          "type": "datetime",
+          "standardization": "iso_datetime"
+        },
+        "실패코드": {
+          "required": false,
+          "type": "string"
+        }
+      },
+      "unique": [
+        [
+          "환불번호"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "결제번호"
+          ],
+          "table": "payments",
+          "target_columns": [
+            "결제번호"
+          ]
+        },
+        {
+          "columns": [
+            "반품번호"
+          ],
+          "table": "returns",
+          "target_columns": [
+            "반품번호"
+          ]
+        }
+      ]
+    }
+  }
+}

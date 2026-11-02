@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "tables": {
+    "warehouses": {
+      "columns": {
+        "warehouse_id": {
+          "required": true
+        },
+        "name": {}
+      },
+      "unique": [
+        [
+          "warehouse_id"
+        ]
+      ]
+    },
+    "stock": {
+      "columns": {
+        "warehouse_id": {
+          "required": true
+        },
+        "sku": {
+          "required": true
+        },
+        "quantity": {
+          "required": true,
+          "type": "integer",
+          "min": 0
+        },
+        "status": {
+          "allowed": [
+            "ready",
+            "reserved"
+          ]
+        },
+        "received_on": {
+          "type": "date"
+        }
+      },
+      "unique": [
+        [
+          "warehouse_id",
+          "sku"
+        ]
+      ],
+      "references": [
+        {
+          "columns": [
+            "warehouse_id"
+          ],
+          "table": "warehouses",
+          "target_columns": [
+            "warehouse_id"
+          ]
+        }
+      ]
+    }
+  }
+}

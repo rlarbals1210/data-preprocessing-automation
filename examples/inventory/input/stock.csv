@@ -1,0 +1,6 @@
+warehouse_id,sku,quantity,status,received_on
+W1,A,0,ready,2026-10-01
+W1,B,-2,ready,2026-10-02
+W9,C,5,ready,2026-10-03
+W1,D,,unknown,2026-02-30
+W1,A,1,ready,2026-10-04
