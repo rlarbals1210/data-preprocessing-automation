@@ -33,7 +33,10 @@ export default function Upload() {
         <Stack>
           <Group>
             <Text fw={600} w={64}>
-              출처
+              출처{' '}
+              <Text span c="red">
+                *
+              </Text>
             </Text>
             <Autocomplete
               value={source}
@@ -41,6 +44,7 @@ export default function Upload() {
               data={(sources.data ?? []).map((s) => s.name)}
               placeholder="출처 이름"
               w={280}
+              error={files.length > 0 && !source.trim() ? '출처를 입력하세요' : undefined}
             />
           </Group>
           <Group>
