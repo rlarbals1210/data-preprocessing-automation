@@ -1,4 +1,5 @@
 import { Badge, Group, Loader, Stepper, Text, Title } from '@mantine/core';
+import { IconCheck, IconMinus } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { FINISHED, api, type Run } from '../api';
@@ -56,19 +57,22 @@ export default function RunPage() {
       </Group>
       <Stepper
         active={active === -1 ? 0 : active}
-        size="sm"
+        size="xs"
+        iconSize={26}
+        wrap={false}
         mb="lg"
         onStepClick={(i) => {
           const s = STEPS[i];
           if (!s.disabled && s.ready?.(r)) nav(`/runs/${id}/${s.key}`);
         }}
-        completedIcon={null}
+        styles={{ separator: { marginInline: 6, minWidth: 8 }, stepLabel: { whiteSpace: 'nowrap' } }}
       >
         {STEPS.map((s, i) => (
           <Stepper.Step
             key={s.key}
             label={s.label}
             color={s.disabled ? 'gray' : undefined}
+            completedIcon={s.disabled ? <IconMinus size={14} /> : <IconCheck size={14} />}
             allowStepSelect={!s.disabled && !!s.ready?.(r) && i !== active}
             style={s.disabled ? { opacity: 0.45 } : undefined}
           />
