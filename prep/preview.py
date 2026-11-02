@@ -17,9 +17,10 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from diagnostics.cleaning import clean
-from diagnostics.engine import diagnose, read_table, validate_config
+from diagnostics.engine import diagnose, read_table
 from prep.guard import Guard
 from prep.mapping import Catalog, propose, validate_final
+from prep.plan import build_plan
 from prep.snapshot import create_snapshot
 from prep.store import Store
 from prep.upload import BlobStore, UploadError, ingest
@@ -220,15 +221,18 @@ class Workspace:
         for f in readable:
             data = self.blobs.get(f["sha256"])  # 보관 원본(해시 대조)
             _write_view(data, f, self.guard.safe_join(view, f["mapping"]["table"] + ".csv"))
-        config, skipped = {}, []
+        plan = None
+        config = {}
         if run["snapshot"]:
             snap = self.guard.safe_join(self.root, "config-snapshots", run["snapshot"])
             logical = json.loads((snap / "config/sets/shop/logical-diagnostics.json").read_text(encoding="utf-8"))
             present = {f["mapping"]["table"]: {v for v in f["mapping"]["columns"].values() if v} for f in readable}
-            config, skipped = plan(logical, present)
+            plan = build_plan(logical, present)  # M1-6
+            config = plan["config"]
         report = diagnose(view, config)
         (base / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
-        run.update(status="diagnosed", plan={"skipped_rules": skipped}, result=None)
+        run.update(status="diagnosed", result=None,
+                   plan=None if plan is None else {k: plan[k] for k in ("skipped", "tables", "completeness", "hash")})
         (base / "engine-config.json").write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
         result = self.guard.safe_join(base, "result")
         if result.exists():
@@ -258,7 +262,9 @@ class Workspace:
                         "counts": dict(per_table[t])} for t, s in report["tables"].items()],
             "duplicate_groups": len(report["duplicate_groups"]),
             "rules": {"executed": executed[True], "not_executed": executed[False]},
-            "skipped_rules": (run["plan"] or {}).get("skipped_rules", []),
+            "skipped_rules": (run["plan"] or {}).get("skipped", []),
+            "plan_tables": (run["plan"] or {}).get("tables", {}),
+            "completeness": (run["plan"] or {}).get("completeness", "full"),
             "errors": report["errors"],
         }
 
@@ -367,61 +373,3 @@ def _write_view(data: bytes, entry: dict, target: Path) -> None:
     buf = io.StringIO()
     csv.writer(buf, lineterminator="\n").writerows(out)
     target.write_text(buf.getvalue(), encoding="utf-8")
-
-
-def plan(logical: dict, present: dict[str, set[str]]) -> tuple[dict, list[dict]]:
-    """간이 실행 계획(TD 5-2): 없는 컬럼·대상 테이블에 기대는 규칙은 사유와 함께 뺀다."""
-    skipped, tables = [], {}
-    for name, spec in logical["tables"].items():
-        if name not in present:
-            continue
-        cols = present[name]
-        columns = {}
-        for col, rule in spec["columns"].items():
-            if col not in cols:
-                skipped.append({"table": name, "rule": "column", "columns": [col], "reason": "missing_column"})
-                continue
-            rule = dict(rule)
-            if "required_if" in rule and rule["required_if"]["column"] not in cols:
-                rule.pop("required_if")
-                skipped.append({"table": name, "rule": "required_if", "columns": [col],
-                                "reason": "dependency_skipped"})
-            columns[col] = rule
-        new = {"columns": columns}
-        unique = [g for g in spec.get("unique", []) if all(c in columns for c in g)]
-        skipped += [{"table": name, "rule": "unique", "columns": g, "reason": "dependency_skipped"}
-                    for g in spec.get("unique", []) if g not in unique]
-        if unique:
-            new["unique"] = unique
-        refs = []
-        for ref in spec.get("references", []):
-            if ref["table"] not in present:
-                skipped.append({"table": name, "rule": "reference", "columns": ref["columns"],
-                                "target": ref["table"], "reason": "excluded_target"})
-            elif not all(c in columns for c in ref["columns"]) or not all(
-                    c in present[ref["table"]] and c in logical["tables"][ref["table"]]["columns"]
-                    for c in ref["target_columns"]):
-                skipped.append({"table": name, "rule": "reference", "columns": ref["columns"],
-                                "target": ref["table"], "reason": "dependency_skipped"})
-            else:
-                refs.append(ref)
-        if refs:
-            new["references"] = refs
-        tables[name] = new
-    # 참조 대상 테이블의 대상 컬럼 규칙이 빠졌으면 참조도 뺀다(엔진 검증기 조건)
-    for name, spec in tables.items():
-        kept = []
-        for ref in spec.get("references", []):
-            if all(c in tables[ref["table"]]["columns"] for c in ref["target_columns"]):
-                kept.append(ref)
-            else:
-                skipped.append({"table": name, "rule": "reference", "columns": ref["columns"],
-                                "target": ref["table"], "reason": "dependency_skipped"})
-        if kept:
-            spec["references"] = kept
-        else:
-            spec.pop("references", None)
-    config = {"version": logical.get("version", 1), "tables": tables} if tables else {}
-    if config:
-        validate_config(json.loads(json.dumps(config)))
-    return config, skipped

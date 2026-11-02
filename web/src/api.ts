@@ -47,11 +47,12 @@ export type Run = {
   files: FileEntry[];
   rows: number;
   catalog?: Catalog | null;
-  plan: { skipped_rules: SkippedRule[] } | null;
+  plan: { skipped: SkippedRule[]; tables: Record<string, TablePlan>; completeness: 'full' | 'partial'; hash: string } | null;
   result: ResultSummary | null;
 };
 export type RunListItem = Pick<Run, 'id' | 'created_at' | 'set' | 'source' | 'status' | 'rows' | 'result'> & { file_count: number };
-export type SkippedRule = { table: string; rule: string; columns: string[]; target?: string; reason: string };
+export type SkippedRule = { table: string; kind: string; columns: string[]; target?: string; reason: string };
+export type TablePlan = { diagnosable: boolean; publishable: boolean; missing_required: string[]; reason: string | null };
 export type Category = 'normal_observation' | 'standardization_candidate' | 'business_rule_violation' | 'human_review';
 export type Diagnosis = {
   engine_status: 'completed' | 'incomplete';
@@ -63,6 +64,8 @@ export type Diagnosis = {
   duplicate_groups: number;
   rules: { executed: number; not_executed: number };
   skipped_rules: SkippedRule[];
+  plan_tables: Record<string, TablePlan>;
+  completeness: 'full' | 'partial';
   errors: { table: string; error: string }[];
 };
 export type Issue = {

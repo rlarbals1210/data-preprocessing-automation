@@ -19,10 +19,22 @@ import { IconArrowRight } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api, type Category, type Run } from '../api';
-import { CATEGORY, CATEGORY_ORDER, CODE, SKIP_REASON, fmt } from '../labels';
+import { api, type Category, type Run, type SkippedRule } from '../api';
+import { CATEGORY, CATEGORY_ORDER, CODE, PUBLISH_REASON, RULE_KIND, SKIP_REASON, fmt } from '../labels';
 
 const PAGE = 25;
+
+type Group = { table: string; columns: string[]; target?: string; reason: string; kinds: string[] };
+function groupSkipped(rules: SkippedRule[]): Group[] {
+  const map = new Map<string, Group>();
+  rules.forEach((r) => {
+    const key = `${r.table}|${r.columns.join(',')}|${r.target ?? ''}|${r.reason}`;
+    const g = map.get(key) ?? { table: r.table, columns: r.columns, target: r.target, reason: r.reason, kinds: [] };
+    g.kinds.push(r.kind);
+    map.set(key, g);
+  });
+  return [...map.values()];
+}
 
 function Stat({ label, value, color }: { label: string; value: number | string; color?: string }) {
   return (
@@ -55,8 +67,8 @@ export default function Diagnosis({ run }: { run: Run }) {
     <Stack>
       <Group justify="space-between">
         <Group gap="sm">
-          <Badge size="lg" variant="light" color={x.engine_status === 'completed' ? 'teal' : 'orange'}>
-            {x.engine_status === 'completed' ? '검사 완료' : '검사 일부'}
+          <Badge size="lg" variant="light" color={x.completeness === 'full' ? 'teal' : 'orange'}>
+            {x.completeness === 'full' ? '전체 검사' : '부분 검사'}
           </Badge>
           <Badge size="lg" variant="outline" color="gray">
             {x.mode === 'configured' ? '규칙 검사' : '프로파일만'}
@@ -89,19 +101,20 @@ export default function Diagnosis({ run }: { run: Run }) {
               {x.errors.map((e, i) => (
                 <Table.Tr key={`e${i}`}>
                   <Table.Td>{e.table}</Table.Td>
-                  <Table.Td colSpan={2}>{e.error}</Table.Td>
+                  <Table.Td colSpan={3}>{e.error}</Table.Td>
                 </Table.Tr>
               ))}
-              {x.skipped_rules.map((s, i) => (
+              {groupSkipped(x.skipped_rules).map((g, i) => (
                 <Table.Tr key={i}>
-                  <Table.Td>{s.table}</Table.Td>
+                  <Table.Td ff="monospace">{g.table}</Table.Td>
                   <Table.Td ff="monospace">
-                    {s.rule} · {s.columns.join(', ')}
-                    {s.target ? ` → ${s.target}` : ''}
+                    {g.columns.join(', ')}
+                    {g.target ? ` → ${g.target}` : ''}
                   </Table.Td>
+                  <Table.Td>{g.kinds.map((k) => RULE_KIND[k] ?? k).join(' · ')}</Table.Td>
                   <Table.Td>
                     <Badge variant="light" color="gray">
-                      {SKIP_REASON[s.reason] ?? s.reason}
+                      {SKIP_REASON[g.reason] ?? g.reason}
                     </Badge>
                   </Table.Td>
                 </Table.Tr>
@@ -120,6 +133,7 @@ export default function Diagnosis({ run }: { run: Run }) {
             <Table.Tr>
               <Table.Th>테이블</Table.Th>
               <Table.Th ta="right">행</Table.Th>
+              <Table.Th>발행</Table.Th>
               {CATEGORY_ORDER.map((c) => (
                 <Table.Th key={c} ta="right">
                   {CATEGORY[c].label}
@@ -132,6 +146,18 @@ export default function Diagnosis({ run }: { run: Run }) {
               <Table.Tr key={t.table}>
                 <Table.Td ff="monospace">{t.table}</Table.Td>
                 <Table.Td ta="right">{fmt(t.rows)}</Table.Td>
+                <Table.Td>
+                  {x.plan_tables[t.table] &&
+                    (x.plan_tables[t.table].publishable ? (
+                      <Badge size="sm" variant="light" color="teal">
+                        가능
+                      </Badge>
+                    ) : (
+                      <Badge size="sm" variant="light" color="red">
+                        제외 · {PUBLISH_REASON[x.plan_tables[t.table].reason ?? ''] ?? x.plan_tables[t.table].reason}
+                      </Badge>
+                    ))}
+                </Table.Td>
                 {CATEGORY_ORDER.map((c) => (
                   <Table.Td key={c} ta="right" c={t.counts[c] ? `${CATEGORY[c].color}.7` : 'dimmed'}>
                     {fmt(t.counts[c])}

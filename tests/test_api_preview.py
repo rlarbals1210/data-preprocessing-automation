@@ -6,7 +6,6 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
-from prep.preview import plan
 
 ROOT = Path(__file__).resolve().parents[1]
 DEV = ROOT / "data/dirty/development"
@@ -59,8 +58,9 @@ def test_partial_upload_skips_dependent_rules(client):
     confirm(client, run)
     d = client.post(f"/api/runs/{run['id']}/diagnose").json()
     assert d["engine_status"] == "completed"
-    reasons = {(s["rule"], s["reason"]) for s in d["skipped_rules"]}
+    reasons = {(s["kind"], s["reason"]) for s in d["skipped_rules"]}
     assert ("reference", "excluded_target") in reasons
+    assert d["completeness"] == "partial" and d["plan_tables"]["orders"]["publishable"]
 
 
 def test_profile_mode(client):
@@ -115,8 +115,10 @@ def test_mapping_edit_keeps_auto_proposal_and_invalidates(client):
     assert after["status"] == "uploaded"
     assert client.get(f"/api/runs/{run['id']}/diagnosis").status_code == 409
     d = client.post(f"/api/runs/{run['id']}/diagnose").json()
-    assert {"table": "orders", "rule": "column", "columns": ["ordered_at"], "reason": "missing_column"} in d[
+    assert {"table": "orders", "kind": "required", "columns": ["ordered_at"], "reason": "missing_column"} in d[
         "skipped_rules"]
+    assert d["plan_tables"]["orders"] == {"diagnosable": True, "publishable": False,
+                                          "missing_required": ["ordered_at"], "reason": "missing_required"}
 
 
 def test_mapping_violations_rejected(client):
@@ -175,15 +177,3 @@ def test_broken_csv_reported(client):
     assert client.post(f"/api/runs/{r.json()['id']}/diagnose").status_code == 400
 
 
-def test_plan_reasons():
-    logical = {"version": 1, "tables": {
-        "a": {"columns": {"id": {"required": True}, "s": {}, "m": {"required_if": {"column": "s", "in": ["x"]}}},
-              "unique": [["id"]]},
-        "b": {"columns": {"id": {}, "a_id": {}}, "references": [
-            {"columns": ["a_id"], "table": "a", "target_columns": ["id"]}]}}}
-    config, skipped = plan(logical, {"a": {"id", "m"}, "b": {"id", "a_id"}})
-    assert {(s["table"], s["rule"], s["reason"]) for s in skipped} == {
-        ("a", "column", "missing_column"), ("a", "required_if", "dependency_skipped")}
-    assert config["tables"]["b"]["references"]
-    config, skipped = plan(logical, {"b": {"id", "a_id"}})
-    assert ("b", "reference", "excluded_target") in {(s["table"], s["rule"], s["reason"]) for s in skipped}

@@ -38,6 +38,23 @@ export const CHANGE: Record<string, string> = {
   outer_whitespace: '앞뒤 공백 제거',
 };
 
+export const RULE_KIND: Record<string, string> = {
+  required: '필수',
+  required_if: '조건부 필수',
+  missing_values: '결측 표현',
+  comparison_normalization: '표기 비교',
+  allowed: '허용값',
+  pattern: '형식',
+  type: '타입',
+  min: '최솟값',
+  max: '최댓값',
+  standardization: '표준화',
+  unique: '유일 키',
+  reference: '참조',
+};
+
+export const PUBLISH_REASON: Record<string, string> = { missing_required: '필수 컬럼 없음', no_rules: '검사할 규칙 없음' };
+
 export const SKIP_REASON: Record<string, string> = {
   missing_column: '컬럼 없음',
   excluded_target: '대상 테이블 없음',
