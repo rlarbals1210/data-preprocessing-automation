@@ -3,10 +3,19 @@ name = "data-preprocessing-automation"
 version = "0.0.0"
 description = "여러 담당자가 만든 쇼핑몰 데이터를 승인 기반으로 표준화하는 로컬 프로토타입"
 requires-python = ">=3.12,<3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.115",
+    "python-multipart>=0.0.9",
+    "uvicorn>=0.30",
+]
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.6"]
+dev = [
+    "httpx>=0.27",
+    "httpx2>=2.16.0",
+    "pytest>=8",
+    "ruff>=0.6",
+]
 # scripts/compare_mysql_csv.py 전용 (선택): uv sync --group mysql
 mysql = ["PyMySQL[rsa]>=1.1.1,<2"]
 

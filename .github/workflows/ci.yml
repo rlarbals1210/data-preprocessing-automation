@@ -22,3 +22,20 @@ jobs:
         run: uv run ruff check .
       - name: 테스트 (평가 정답 없이, tests 경로만)
         run: uv run pytest tests
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: 의존성
+        run: npm ci
+      - name: 타입 검사·빌드
+        run: npm run build
