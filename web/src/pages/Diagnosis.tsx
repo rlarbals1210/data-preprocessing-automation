@@ -20,7 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type Category, type Run, type SkippedRule } from '../api';
-import { CATEGORY, CATEGORY_ORDER, CODE, PUBLISH_REASON, RULE_KIND, SKIP_REASON, fmt } from '../labels';
+import { CATEGORY, CATEGORY_ORDER, CODE, PUBLISH_REASON, RULE_KIND, SKIP_REASON, fmt, where } from '../labels';
 
 const PAGE = 25;
 
@@ -199,7 +199,7 @@ export default function Diagnosis({ run }: { run: Run }) {
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>테이블</Table.Th>
-                  <Table.Th ta="right">레코드</Table.Th>
+                  <Table.Th>원본 위치</Table.Th>
                   <Table.Th>컬럼</Table.Th>
                   <Table.Th>값</Table.Th>
                   <Table.Th>규칙</Table.Th>
@@ -210,7 +210,9 @@ export default function Diagnosis({ run }: { run: Run }) {
                 {issues.data?.items.map((i, k) => (
                   <Table.Tr key={k}>
                     <Table.Td ff="monospace">{i.table}</Table.Td>
-                    <Table.Td ta="right">{i.record}</Table.Td>
+                    <Table.Td c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                      {where(i.source)}
+                    </Table.Td>
                     <Table.Td ff="monospace">{i.columns.length > 3 ? `${i.columns.length}개 컬럼` : i.columns.join(', ')}</Table.Td>
                     <Table.Td maw={260} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {i.columns.length === 1 ? <Code>{i.values[i.columns[0]] || '∅'}</Code> : '—'}

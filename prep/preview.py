@@ -24,6 +24,7 @@ from prep.plan import build_plan
 from prep.snapshot import create_snapshot
 from prep.store import Store
 from prep.upload import BlobStore, UploadError, ingest
+from prep.view import Locator, ViewInput, build_view, strip_extras
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SETS = {"shop": "쇼핑몰 표준", "none": "설정 없음"}
@@ -213,14 +214,21 @@ class Workspace:
         dup = [t for t, n in tables.items() if n > 1]
         if dup:
             raise FlowError("duplicate_table", f"같은 표준 테이블로 가는 파일이 여럿이다: {dup}")
-        view = self.guard.safe_join(base, "view")
-        if view.exists():
-            for p in view.iterdir():
-                p.unlink()
-        view.mkdir(exist_ok=True)
+        view_dir = self.guard.safe_join(base, "view")
+        if view_dir.exists():
+            _remove_tree(view_dir)
+        cat = self._catalog(run)
+        inputs = [ViewInput(f["item_id"], f["mapping"]["table"], self.blobs.path(f["sha256"]), f["mapping"]["columns"],
+                            order, f["read_options"]["encoding"], f["read_options"]["delimiter"], f["name"])
+                  for order, f in enumerate(readable, start=1)]
         for f in readable:
-            data = self.blobs.get(f["sha256"])  # 보관 원본(해시 대조)
-            _write_view(data, f, self.guard.safe_join(view, f["mapping"]["table"] + ".csv"))
+            self.blobs.get(f["sha256"])  # 보관 원본 해시 대조
+        try:
+            built = build_view(inputs, view_dir, self.guard,  # M1-7 표준화 뷰·역추적
+                               required=cat.required if cat else None, column_order=cat.columns if cat else None)
+        except ValueError as exc:
+            raise FlowError("view_failed", str(exc)) from exc
+        view = built.folder
         plan = None
         config = {}
         if run["snapshot"]:
@@ -229,9 +237,9 @@ class Workspace:
             present = {f["mapping"]["table"]: {v for v in f["mapping"]["columns"].values() if v} for f in readable}
             plan = build_plan(logical, present)  # M1-6
             config = plan["config"]
-        report = diagnose(view, config)
+        report = Locator(built.lineage).translate_report(diagnose(view, config))
         (base / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
-        run.update(status="diagnosed", result=None,
+        run.update(status="diagnosed", result=None, view_hash=built.hash,
                    plan=None if plan is None else {k: plan[k] for k in ("skipped", "tables", "completeness", "hash")})
         (base / "engine-config.json").write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
         result = self.guard.safe_join(base, "result")
@@ -276,8 +284,15 @@ class Workspace:
             items = [i for i in items if i["table"] == table]
         page = items[offset: offset + limit]
         keep = ("table", "record", "columns", "values", "code", "severity", "category", "suggested_value",
-                "category_reason")
-        return {"total": len(items), "items": [{k: i.get(k) for k in keep} for i in page]}
+                "category_reason", "source")
+        names = {f["item_id"]: f["name"] for f in self.load(run_id)["files"]}
+        out = []
+        for i in page:
+            item = {k: i.get(k) for k in keep}
+            if item["source"]:
+                item["source"] = item["source"] | {"file": names.get(item["source"]["item_id"])}
+            out.append(item)
+        return {"total": len(items), "items": out}
 
     def changes_preview(self, run_id: str) -> dict:
         report = self._report(run_id)
@@ -336,10 +351,18 @@ class Workspace:
         if not path.is_file():
             raise FlowError("not_executed", "아직 실행하지 않았다", 409)
         items = json.loads(path.read_text(encoding="utf-8"))
-        keep = ("table", "record", "column", "before", "after", "codes")
-        return {"total": len(items), "items": [{k: i.get(k) for k in keep} for i in items[offset: offset + limit]]}
+        lineage = json.loads((self.run_dir(run_id) / "view" / "lineage.json").read_text(encoding="utf-8"))
+        names = {f["item_id"]: f["name"] for f in self.load(run_id)["files"]}
+        page = Locator(lineage).translate_changes(items[offset: offset + limit])
+        keep = ("table", "record", "column", "before", "after", "codes", "source")
+        out = []
+        for i in page:
+            item = {k: i.get(k) for k in keep}
+            item["source"] = item["source"] | {"file": names.get(item["source"]["item_id"])}
+            out.append(item)
+        return {"total": len(items), "items": out}
 
-    def download(self, run_id: str, name: str) -> Path:
+    def download(self, run_id: str, name: str) -> bytes:
         base = self.run_dir(run_id)
         if name == "changes.csv":
             path = self.guard.safe_join(base, "result", "changes.csv")
@@ -349,7 +372,9 @@ class Workspace:
             raise FlowError("file_not_found", "파일이 없다", 404)
         if not path.is_file():
             raise FlowError("file_not_found", "파일이 없다", 404)
-        return path
+        if name == "changes.csv":
+            return path.read_bytes()
+        return strip_extras(path.read_text(encoding="utf-8")).encode("utf-8")  # 보조 컬럼은 출력하지 않는다
 
 
 def _remove_tree(path: Path) -> None:

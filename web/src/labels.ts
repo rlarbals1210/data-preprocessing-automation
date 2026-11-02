@@ -96,3 +96,6 @@ export const REASON: Record<string, string> = {
 };
 
 export const TABLE_BASIS: Record<string, string> = { name: '이름 일치', headers: '헤더 비율', user: '직접 선택' };
+
+export const where = (s?: { file: string | null; record: number; line_start: number; line_end: number } | null) =>
+  !s ? '' : `${s.file ?? ''} ${s.record}행 · ${s.line_start === s.line_end ? `${s.line_start}줄` : `${s.line_start}–${s.line_end}줄`}`;

@@ -9,10 +9,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import Annotated
+from urllib.parse import quote
 
 from fastapi import Body, FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from prep.preview import PROJECT_ROOT, SETS, FlowError, Workspace
@@ -102,8 +103,9 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
 
     @app.get("/api/runs/{run_id}/files/{name}")
     def download(run_id: str, name: str):
-        path = ws.download(run_id, name)
-        return FileResponse(path, filename=name, media_type="text/csv")
+        data = ws.download(run_id, name)
+        return Response(data, media_type="text/csv; charset=utf-8",
+                        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
 
     dist = PROJECT_ROOT / "web" / "dist"
     if dist.is_dir():

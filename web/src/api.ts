@@ -68,6 +68,15 @@ export type Diagnosis = {
   completeness: 'full' | 'partial';
   errors: { table: string; error: string }[];
 };
+export type Source = {
+  file: string | null;
+  item_id: number;
+  record: number;
+  line_start: number;
+  line_end: number;
+  columns: Record<string, string | null>;
+  absent: string[];
+};
 export type Issue = {
   table: string;
   record: number;
@@ -78,6 +87,7 @@ export type Issue = {
   category: Category;
   suggested_value: string | null;
   category_reason: string;
+  source?: Source | null;
 };
 export type PreviewGroup = {
   table: string;
@@ -86,7 +96,15 @@ export type PreviewGroup = {
   cells: number;
   examples: { before: string; after: string }[];
 };
-export type Change = { table: string; record: number; column: string; before: string; after: string; codes: string[] };
+export type Change = {
+  table: string;
+  record: number;
+  column: string;
+  before: string;
+  after: string;
+  codes: string[];
+  source: Source;
+};
 export type Page<T> = { total: number; items: T[] };
 
 export class ApiError extends Error {

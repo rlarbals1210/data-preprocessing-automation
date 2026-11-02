@@ -3,7 +3,7 @@ import { IconArrowRight, IconDownload } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, type Run } from '../api';
-import { CATEGORY, CATEGORY_ORDER, CHANGE, CODE, RESULT_STATUS, fmt } from '../labels';
+import { CATEGORY, CATEGORY_ORDER, CHANGE, CODE, RESULT_STATUS, fmt, where } from '../labels';
 
 const PAGE = 25;
 
@@ -130,7 +130,7 @@ export default function Result({ run }: { run: Run }) {
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>테이블</Table.Th>
-                  <Table.Th ta="right">레코드</Table.Th>
+                  <Table.Th>원본 위치</Table.Th>
                   <Table.Th>컬럼</Table.Th>
                   <Table.Th>변경</Table.Th>
                   <Table.Th>규칙</Table.Th>
@@ -140,7 +140,9 @@ export default function Result({ run }: { run: Run }) {
                 {changes.data?.items.map((c, k) => (
                   <Table.Tr key={k}>
                     <Table.Td ff="monospace">{c.table}</Table.Td>
-                    <Table.Td ta="right">{c.record}</Table.Td>
+                    <Table.Td c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                      {where(c.source)}
+                    </Table.Td>
                     <Table.Td ff="monospace">{c.column}</Table.Td>
                     <Table.Td>
                       <Group gap={6} wrap="nowrap">

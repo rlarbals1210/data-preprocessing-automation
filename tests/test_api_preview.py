@@ -48,6 +48,10 @@ def test_full_flow_all_tables(client):
     assert len(full["files"]) == 13
     ch = client.get(f"/api/runs/{run['id']}/changes", params={"limit": 5}).json()
     assert ch["total"] == 4424 and len(ch["items"]) == 5
+    first = ch["items"][0]
+    assert first["source"]["file"] == f"{first['table']}.csv" and first["source"]["record"] >= 1
+    iss = client.get(f"/api/runs/{run['id']}/issues", params={"category": "human_review", "limit": 3}).json()
+    assert all(i["source"]["file"].endswith(".csv") and i["source"]["line_start"] >= 2 for i in iss["items"])
     dl = client.get(f"/api/runs/{run['id']}/files/orders.csv")
     assert dl.status_code == 200 and dl.text.startswith("order_id,")
     assert client.get("/api/runs").json()[0]["id"] == run["id"]
@@ -177,3 +181,19 @@ def test_broken_csv_reported(client):
     assert client.post(f"/api/runs/{r.json()['id']}/diagnose").status_code == 400
 
 
+
+
+def test_extra_columns_not_in_outputs_and_not_duplicates(client):
+    """추가 컬럼만 다른 두 행은 중복이 아니고, 보조 컬럼은 다운로드에 나오지 않는다."""
+    text = (DEV / "categories.csv").read_text(encoding="utf-8-sig").splitlines()
+    rows = [text[0] + ",비고"] + [text[1] + ",첫째", text[1] + ",둘째"] + [r + "," for r in text[2:]]
+    r = client.post("/api/runs", files=[("files", ("categories.csv", ("\n".join(rows) + "\n").encode(), "text/csv"))],
+                    data={"set": "shop", "source": "s"})
+    run = r.json()
+    confirm(client, run)
+    client.post(f"/api/runs/{run['id']}/diagnose")
+    dup = client.get(f"/api/runs/{run['id']}/issues", params={"category": "human_review"}).json()["items"]
+    assert not any(i["code"] == "duplicate_row" and i["record"] in (1, 2) for i in dup)
+    client.post(f"/api/runs/{run['id']}/execute")
+    body = client.get(f"/api/runs/{run['id']}/files/categories.csv").text
+    assert "__extras_digest__" not in body and body.startswith("category_id,")
