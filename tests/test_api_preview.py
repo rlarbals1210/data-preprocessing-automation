@@ -17,9 +17,9 @@ def client(tmp_path):
     return TestClient(create_app(tmp_path / "workspace"))
 
 
-def upload(client, names, set_name="shop"):
+def upload(client, names, set_name="shop", source="판매팀"):
     files = [("files", (n, (DEV / n).read_bytes(), "text/csv")) for n in names]
-    r = client.post("/api/runs", files=files, data={"set": set_name})
+    r = client.post("/api/runs", files=files, data={"set": set_name, "source": source})
     assert r.status_code == 200, r.text
     return r.json()
 
@@ -58,20 +58,39 @@ def test_profile_mode(client):
     assert d["mode"] == "profile"
 
 
-@pytest.mark.parametrize("name", ["orders.txt", ".csv", "a b?.csv", "x" * 120 + ".csv"])
+@pytest.mark.parametrize("name", ["orders.txt", ".csv", "x" * 300 + ".csv", "x.csv.txt"])
 def test_bad_file_names_rejected(client, name):
-    r = client.post("/api/runs", files=[("files", (name, b"a\n1\n", "text/csv"))], data={"set": "shop"})
-    assert r.status_code == 400 and r.json()["code"] == "bad_file_name"
+    r = client.post("/api/runs", files=[("files", (name, b"a\n1\n", "text/csv"))],
+                    data={"set": "shop", "source": "s"})
+    assert r.status_code == 400 and r.json()["code"] == "bad_upload"
+
+
+def test_source_required_and_listed(client):
+    r = client.post("/api/runs", files=[("files", ("a.csv", b"a\n1\n", "text/csv"))], data={"set": "shop"})
+    assert r.status_code == 400 and "출처" in r.json()["message"]
+    upload(client, ["categories.csv"], source="물류팀")
+    upload(client, ["categories.csv"], source="물류팀")
+    assert [s["name"] for s in client.get("/api/sources").json()] == ["물류팀"]
+
+
+def test_same_name_files_kept_separately(client):
+    data = (DEV / "categories.csv").read_bytes()
+    r = client.post("/api/runs", files=[("files", ("categories.csv", data, "text/csv"))] * 2,
+                    data={"set": "shop", "source": "s"})
+    run = r.json()
+    assert len({f["item_id"] for f in run["files"]}) == 2
+    assert client.post(f"/api/runs/{run['id']}/diagnose").json()["code"] == "duplicate_table"
 
 
 @pytest.mark.parametrize("name", ["../orders.csv", "folder/orders.csv", "../../x/orders.csv"])
 def test_upload_paths_reduced_to_file_name(client, tmp_path, name):
     """폴더 업로드·경로 조작 이름은 파일 이름만 남기고 실행 폴더 안에만 쓴다."""
-    r = client.post("/api/runs", files=[("files", (name, b"a\n1\n", "text/csv"))], data={"set": "shop"})
+    r = client.post("/api/runs", files=[("files", (name, b"a\n1\n", "text/csv"))],
+                    data={"set": "shop", "source": "s"})
     run = r.json()
     assert r.status_code == 200 and run["files"][0]["name"] == "orders.csv"
-    written = sorted(p.relative_to(tmp_path) for p in tmp_path.rglob("orders.csv"))
-    assert written == [Path("workspace/runs") / run["id"] / "input/orders.csv"]
+    assert not list(tmp_path.rglob("orders.csv"))  # 원본은 이름이 아니라 해시로 blobs/에 보관
+    assert (tmp_path / "workspace/blobs" / run["files"][0]["sha256"]).is_file()
 
 
 def test_unknown_run_and_files(client):
@@ -84,7 +103,8 @@ def test_unknown_run_and_files(client):
 
 
 def test_broken_csv_reported(client):
-    r = client.post("/api/runs", files=[("files", ("orders.csv", b"a,a\n1,2\n", "text/csv"))], data={"set": "shop"})
+    r = client.post("/api/runs", files=[("files", ("orders.csv", b"a,a\n1,2\n", "text/csv"))],
+                    data={"set": "shop", "source": "s"})
     assert r.json()["files"][0]["read_error"]
     assert client.post(f"/api/runs/{r.json()['id']}/diagnose").status_code == 400
 

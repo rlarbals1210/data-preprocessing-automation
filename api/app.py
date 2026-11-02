@@ -47,9 +47,14 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
 
     @app.post("/api/runs")
     async def create_run(files: Annotated[list[UploadFile], File()],
-                         set_name: Annotated[str, Form(alias="set")] = "shop"):
+                         set_name: Annotated[str, Form(alias="set")] = "shop",
+                         source: Annotated[str, Form()] = ""):
         payload = [(os.path.basename(f.filename or ""), await f.read()) for f in files]
-        return ws.create_run(set_name, payload)
+        return ws.create_run(set_name, payload, source)
+
+    @app.get("/api/sources")
+    def sources():
+        return [{"id": s["id"], "name": s["name"]} for s in ws.store.sources()]
 
     @app.get("/api/runs/{run_id}")
     def run(run_id: str):

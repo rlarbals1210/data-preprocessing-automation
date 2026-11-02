@@ -31,6 +31,7 @@ export default function Home() {
               <Table.Tr>
                 <Table.Th>실행</Table.Th>
                 <Table.Th>시각</Table.Th>
+                <Table.Th>출처</Table.Th>
                 <Table.Th>설정</Table.Th>
                 <Table.Th ta="right">파일</Table.Th>
                 <Table.Th ta="right">행</Table.Th>
@@ -45,6 +46,7 @@ export default function Home() {
                     {r.id}
                   </Table.Td>
                   <Table.Td>{when(r.created_at)}</Table.Td>
+                  <Table.Td>{r.source}</Table.Td>
                   <Table.Td>{SET_LABEL[r.set] ?? r.set}</Table.Td>
                   <Table.Td ta="right">{fmt(r.file_count)}</Table.Td>
                   <Table.Td ta="right">{fmt(r.rows)}</Table.Td>

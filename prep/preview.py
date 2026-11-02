@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 import csv
-import hashlib
 import io
 import json
 import re
@@ -21,12 +20,13 @@ from diagnostics.cleaning import clean
 from diagnostics.engine import diagnose, validate_config
 from prep.guard import Guard
 from prep.snapshot import create_snapshot
+from prep.store import Store
+from prep.upload import BlobStore, UploadError, ingest
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SETS = {"shop": "쇼핑몰 표준", "none": "설정 없음"}
 RUN_ID = re.compile(r"[0-9]{8}T[0-9]{6}Z-[0-9a-f]{6}")
 FILE_NAME = re.compile(r"[A-Za-z0-9가-힣_.-]{1,100}\.csv")
-MAX_FILE_BYTES = 20 * 1024 * 1024
 
 
 class FlowError(ValueError):
@@ -42,6 +42,8 @@ class Workspace:
         self.guard = Guard([self.root], project_root=PROJECT_ROOT)
         self.runs = self.guard.safe_join(self.root, "runs")
         self.runs.mkdir(exist_ok=True)
+        self.store = Store(self.root, self.guard)
+        self.blobs = BlobStore(self.root, self.guard)
 
     # ---- 저장 ----
     def run_dir(self, run_id: str) -> Path:
@@ -66,36 +68,30 @@ class Workspace:
         for p in sorted(self.runs.iterdir(), reverse=True):
             if RUN_ID.fullmatch(p.name) and (p / "run.json").is_file():
                 r = json.loads((p / "run.json").read_text(encoding="utf-8"))
-                items.append({k: r.get(k) for k in ("id", "created_at", "set", "status", "rows", "result")}
+                items.append({k: r.get(k) for k in ("id", "created_at", "set", "source", "status", "rows", "result")}
                              | {"file_count": len(r["files"])})
         return items
 
     # ---- 업로드 ----
-    def create_run(self, set_name: str, files: list[tuple[str, bytes]]) -> dict:
+    def create_run(self, set_name: str, files: list[tuple[str, bytes]], source: str = "기본 출처") -> dict:
         if set_name not in SETS:
             raise FlowError("bad_set", f"알 수 없는 설정: {set_name}")
-        if not files:
-            raise FlowError("no_files", "CSV 파일이 필요하다")
-        names = [n for n, _ in files]
-        if len(set(names)) != len(names):
-            raise FlowError("duplicate_file", "같은 이름의 파일이 두 번 올라왔다")
-        for name, data in files:
-            if not FILE_NAME.fullmatch(name):
-                raise FlowError("bad_file_name", f"허용하지 않는 파일 이름: {name}")
-            if len(data) > MAX_FILE_BYTES:
-                raise FlowError("file_too_large", f"파일이 너무 크다: {name}")
+        try:
+            uploaded = ingest(self.store, self.blobs, source, files)  # M1-4: 원본 보관·업로드 항목 기록
+        except UploadError as exc:
+            raise FlowError("bad_upload", str(exc)) from exc
         now = datetime.now(UTC)
         run_id = now.strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(3)
-        base = self.guard.safe_join(self.runs, run_id)
-        (base / "input").mkdir(parents=True)
+        self.guard.safe_join(self.runs, run_id).mkdir()
         snapshot = create_snapshot(PROJECT_ROOT, "shop", self.root, self.guard) if set_name == "shop" else None
+        if snapshot:
+            self.store.add_config_snapshot(snapshot.hash, "shop", f"config-snapshots/{snapshot.hash}",
+                                           list(snapshot.files))
         header_map = _load_header_map(snapshot.path) if snapshot else {}
         schema = json.loads((snapshot.path / "schema.json").read_text(encoding="utf-8")) if snapshot else None
-        entries = []
-        for name, data in files:
-            self.guard.safe_join(base, "input", name).write_bytes(data)
-            entries.append(_inspect(name, data, header_map, schema))
-        run = {"id": run_id, "created_at": now.isoformat(), "set": set_name, "status": "uploaded",
+        entries = [_inspect(item, header_map, schema) for item in uploaded["items"]]
+        run = {"id": run_id, "created_at": now.isoformat(), "set": set_name, "source": source.strip(),
+               "batch_id": uploaded["batch_id"], "status": "uploaded",
                "snapshot": snapshot.hash if snapshot else None, "files": entries,
                "rows": sum(f.get("rows", 0) for f in entries), "plan": None, "result": None}
         self.save(run)
@@ -104,6 +100,8 @@ class Workspace:
     # ---- 진단 ----
     def diagnose(self, run_id: str) -> dict:
         run = self.load(run_id)
+        if "batch_id" not in run:
+            raise FlowError("legacy_run", "원본 보관(M1-4) 이전에 만든 실행이라 다시 진단할 수 없다. 새로 업로드하세요", 409)
         base = self.run_dir(run_id)
         readable = [f for f in run["files"] if f["read_error"] is None]
         if not readable:
@@ -118,7 +116,7 @@ class Workspace:
                 p.unlink()
         view.mkdir(exist_ok=True)
         for f in readable:
-            data = self.guard.safe_join(base, "input", f["name"]).read_bytes()
+            data = self.blobs.get(f["sha256"])  # 보관 원본(해시 대조)
             _write_view(data, f, self.guard.safe_join(view, f["table"] + ".csv"))
         config, skipped = {}, []
         if run["snapshot"]:
@@ -257,33 +255,26 @@ def _load_header_map(snapshot_path: Path) -> dict:
     return data["tables"]
 
 
-def _inspect(name: str, data: bytes, header_map: dict, schema: dict | None) -> dict:
-    entry = {"name": name, "sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data), "read_error": None}
-    stem = name[:-4]
-    try:
-        rows = list(csv.reader(io.StringIO(data.decode("utf-8-sig"), newline=""), strict=True))
-    except (UnicodeError, csv.Error) as exc:
-        return entry | {"table": stem, "read_error": f"{type(exc).__name__}: {exc}", "headers": []}
-    if not rows or not rows[0] or len(set(rows[0])) != len(rows[0]) or any(not h.strip() for h in rows[0]):
-        return entry | {"table": stem, "read_error": "빈 헤더 또는 중복 헤더", "headers": []}
-    bad = [i for i, r in enumerate(rows[1:], 1) if len(r) != len(rows[0])]
-    if bad:
-        return entry | {"table": stem, "read_error": f"{bad[0]}번째 레코드의 필드 수가 헤더와 다르다", "headers": []}
-    table = stem
+def _inspect(item: dict, header_map: dict, schema: dict | None) -> dict:
+    entry = {"item_id": item["id"], "name": item["filename"], "sha256": item["sha256"], "bytes": item["bytes"],
+             "read_error": None, "table": item["filename"][:-4]}
+    if item["read_status"] != "ok":
+        e = item["read_errors"][0]
+        where = f"{e['record']}번째 레코드: " if e.get("record") else ""
+        return entry | {"read_error": where + e["reason"], "headers": []}
+    table = entry["table"]
     cmap = header_map.get(table, {}).get("columns", {})
-    logical_names = {f["name"] for f in schema["tables"][table]["fields"]} if schema and table in schema[
-        "tables"] else set()
+    known = bool(schema) and table in schema["tables"]
+    logical_names = {f["name"] for f in schema["tables"][table]["fields"]} if known else set()
     headers = []
-    for h in rows[0]:
+    for h in item["headers"]:
         if h in cmap:
             headers.append({"original": h, "logical": cmap[h], "basis": "legacy_map"})
         elif h in logical_names:
             headers.append({"original": h, "logical": h, "basis": "exact"})
         else:
             headers.append({"original": h, "logical": None, "basis": None})
-    known = bool(schema) and table in schema["tables"]
-    return entry | {"table": table, "known_table": known, "rows": len(rows) - 1, "columns": len(rows[0]),
-                    "headers": headers}
+    return entry | {"known_table": known, "rows": item["rows"], "columns": len(item["headers"]), "headers": headers}
 
 
 def _write_view(data: bytes, entry: dict, target: Path) -> None:

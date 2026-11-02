@@ -296,6 +296,13 @@ class Store:
             raise StoreError(f"실행이 없다: {run_id}")
         return dict(row)
 
+    def sources(self) -> list[dict]:
+        return [dict(r) for r in self.conn.execute("SELECT * FROM source ORDER BY name")]
+
+    def upload_items(self, batch_id: int) -> list[dict]:
+        return [dict(r) for r in self.conn.execute("SELECT * FROM upload_item WHERE batch_id = ? ORDER BY id",
+                                                   (batch_id,))]
+
     def targets(self, run_id: int) -> list[dict]:
         rows = self.conn.execute(
             "SELECT * FROM run_target WHERE run_id = ? AND version = "

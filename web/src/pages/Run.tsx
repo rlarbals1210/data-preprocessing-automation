@@ -43,7 +43,7 @@ export default function RunPage() {
           </Badge>
         </Group>
         <Text c="dimmed" fz="sm">
-          {SET_LABEL[r.set]} · {when(r.created_at)}
+          {r.source} · {SET_LABEL[r.set]} · {when(r.created_at)}
         </Text>
       </Group>
       <Stepper

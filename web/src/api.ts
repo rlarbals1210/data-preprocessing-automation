@@ -1,5 +1,6 @@
 export type Header = { original: string; logical: string | null; basis: 'legacy_map' | 'exact' | null };
 export type FileEntry = {
+  item_id: number;
   name: string;
   table: string;
   known_table?: boolean;
@@ -23,6 +24,7 @@ export type Run = {
   id: string;
   created_at: string;
   set: string;
+  source: string;
   status: RunStatus;
   snapshot: string | null;
   files: FileEntry[];
@@ -30,7 +32,7 @@ export type Run = {
   plan: { skipped_rules: SkippedRule[] } | null;
   result: ResultSummary | null;
 };
-export type RunListItem = Pick<Run, 'id' | 'created_at' | 'set' | 'status' | 'rows' | 'result'> & { file_count: number };
+export type RunListItem = Pick<Run, 'id' | 'created_at' | 'set' | 'source' | 'status' | 'rows' | 'result'> & { file_count: number };
 export type SkippedRule = { table: string; rule: string; columns: string[]; target?: string; reason: string };
 export type Category = 'normal_observation' | 'standardization_candidate' | 'business_rule_violation' | 'human_review';
 export type Diagnosis = {
@@ -90,10 +92,12 @@ const q = (params: Record<string, string | number | undefined | null>) => {
 export const api = {
   sets: () => req<{ id: string; label: string }[]>('/sets'),
   runs: () => req<RunListItem[]>('/runs'),
-  createRun: (files: File[], set: string) => {
+  sources: () => req<{ id: number; name: string }[]>('/sources'),
+  createRun: (files: File[], set: string, source: string) => {
     const form = new FormData();
     files.forEach((f) => form.append('files', f, f.name));
     form.append('set', set);
+    form.append('source', source);
     return req<Run>('/runs', { method: 'POST', body: form });
   },
   run: (id: string) => req<Run>(`/runs/${id}`),

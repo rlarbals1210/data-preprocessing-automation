@@ -46,7 +46,7 @@ export default function Mapping({ run }: { run: Run }) {
       {diagnose.error && <Alert color="red">{(diagnose.error as Error).message}</Alert>}
       <SimpleGrid cols={{ base: 1, md: 2, xl: 3 }}>
         {run.files.map((f) => (
-          <Card key={f.name} withBorder>
+          <Card key={f.item_id} withBorder>
             <Group justify="space-between" mb="xs">
               <Text fw={600}>{f.name}</Text>
               <Badge variant="light" tt="none" ff="monospace" color={f.read_error ? 'red' : f.known_table ? 'teal' : 'gray'}>
