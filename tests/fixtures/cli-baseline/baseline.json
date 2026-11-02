@@ -1,0 +1,184 @@
+{
+  "cases": {
+    "clean-dev-shop": {
+      "exit_code": 1,
+      "files": {
+        "after-summary.md": "b90db8398ff4bac9d4077d5002c0cbcb14029fc50ad0b16763e57094c3c1698f",
+        "after.json": "c95ff4290e2fa1245534da06470d924a28cbdda638c52c3641689f521f7a8d44",
+        "before.json": "c71e966f80b1281b0aa6266bf8ad66faa8d9a124929b22eb9ffcc86722d24891",
+        "changes.csv": "857a3e65cdda4c1201bf54e9eeafbf606e9451134f5e91a6b640c7d155fb500f",
+        "changes.json": "bf58e505c1ab52f5cf6d555d29231fb2082ae90c3001c8f8afc3568207da9ba5",
+        "data/categories.csv": "3975e222abf1426a4f3cf341b1c27dfa3c44f7f44d856135ee8b296e90e47484",
+        "data/customer_addresses.csv": "5390d79271f3a2e3a3eabd3e3e7b702954360b659204dad0784de12ffb06658d",
+        "data/customers.csv": "020dd59a84d0aa6012de7c990357f93bc2f636fa7f0835fb45c6bcae573f14ef",
+        "data/order_items.csv": "6c8222e865193ca2a4a1f7de7ab4476a1628f0f692c11cfbfc0b404fb77aaab1",
+        "data/orders.csv": "c0c56f9e4eaa8ebb8c7425cd2d6cf65f0a5dc258cf482f4afd4a752c16bf28d5",
+        "data/payments.csv": "3492618c55b4359cd923b7a2f2a56dbc21fdb4b3e88ec03132fa9f7d14efe8ab",
+        "data/product_variants.csv": "39d83ec0400d05c74d179e24b75853cb1ed9f04af1cb159713f8c096040f53d6",
+        "data/products.csv": "75af620e18cf5e376c81fd5efbc85b21ad0cc2334d18f798470dcf66fd448f2f",
+        "data/refunds.csv": "21ebc195b4deb3313cb5e97c12e4d8ac283a1e9744eec5700630846e830672ea",
+        "data/return_items.csv": "4049b8ef34aab1e0233504767fc3d7b80f09081cb1a09ea6b2e92dfc0607cec8",
+        "data/returns.csv": "1b17813a6de6fa860653e009ce47cfe704eccb38ffdc0a53d327d8cef41ce1d0",
+        "data/shipment_items.csv": "176a4fd9ccfeb3dd982491ce82270fa0ffb6de1d5a3f058ca4136174df340844",
+        "data/shipments.csv": "8d05f051b7d3bec04bd6eda60c74d83a0a53fa617a5f24cca17aa725e94f99f4",
+        "held.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "manifest.json": "5eb668689914a9debd105fae23d0ad3decdcb10a88a703ca6ef5e9b413853a33",
+        "summary.md": "aac02f8f19f7cbf33a383173d1ea9a6908377ab7f2c684920f53889155adcca3"
+      },
+      "source_unchanged": true,
+      "stderr": [],
+      "stdout": [
+        "정제 완료: 4424셀 변경 / 6409행 유지",
+        "결과: <OUT>/summary.md"
+      ],
+      "summary": {
+        "after_categories": {
+          "business_rule_violation": 16,
+          "human_review": 9,
+          "normal_observation": 2156,
+          "standardization_candidate": 0
+        },
+        "changed_cells": 4424,
+        "rows": 6409,
+        "status": "completed"
+      }
+    },
+    "clean-existing-output": {
+      "exit_code": 2,
+      "files": {},
+      "source_unchanged": true,
+      "stderr": [
+        "Cleaning failed: ValueError: Output already exists; choose a new directory"
+      ],
+      "stdout": [],
+      "summary": {}
+    },
+    "clean-inventory": {
+      "exit_code": 1,
+      "files": {
+        "after-summary.md": "6f653222dc62cc74fb3e2ee7a650899ffb16bbdd0f85e8448d2b751008b372c6",
+        "after.json": "02f4967d8ca14fa34a48ef750269879d27a98200ef6b4a4a5ab75be251ed8c66",
+        "before.json": "117266ab281ccf4f127b3f8cd1b78c6f4c74db7724a3ebd74471d0cee0157c90",
+        "changes.csv": "b4f1d353f2cd2ab035a549c3f0289887c2cad8b9b854f0e1bbf9304ca9d2b6ea",
+        "changes.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "data/stock.csv": "baa61ff0ce2e41cbc4f02763175214866e01e4521105401b28aec9e465df8bcd",
+        "data/warehouses.csv": "1b10138e12abced0a05df94570c89b4d4660eb4bb7a5430564bcf25b9606c0b4",
+        "held.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "manifest.json": "f39ec194f8b254d6edd9a75df2a0071cb512db827d4d96bcf12abbdcff0cbd2a",
+        "summary.md": "f38be221a9b8720a30cad321cb4125934ec2b64ab88b60a8277e898d03880083"
+      },
+      "source_unchanged": true,
+      "stderr": [],
+      "stdout": [
+        "정제 완료: 0셀 변경 / 6행 유지",
+        "결과: <OUT>/summary.md"
+      ],
+      "summary": {
+        "after_categories": {
+          "business_rule_violation": 7,
+          "human_review": 1,
+          "normal_observation": 0,
+          "standardization_candidate": 0
+        },
+        "changed_cells": 0,
+        "rows": 6,
+        "status": "completed"
+      }
+    },
+    "diagnose-dev-profile": {
+      "exit_code": 1,
+      "files": {
+        "report.json": "7e6b6ef3d08306d6330922c8de74218964e5956a75212ed0c9bc0c67d50bfd8c",
+        "summary.md": "de913dcd594c15fc599461e0b3494271a4d8716f086e1fedf70a8511b53b947b"
+      },
+      "source_unchanged": true,
+      "stderr": [],
+      "stdout": [
+        "실행 상태: completed / 6409행",
+        "정상 관측: 2018건",
+        "표준화 후보: 0건",
+        "업무 규칙 위반: 0건",
+        "사람 검토 필요: 235건",
+        "Report: <OUT>/report.json",
+        "Summary: <OUT>/summary.md"
+      ],
+      "summary": {
+        "category_counts": {
+          "business_rule_violation": 0,
+          "human_review": 235,
+          "normal_observation": 2018,
+          "standardization_candidate": 0
+        },
+        "rows_read": 6409,
+        "status": "completed"
+      }
+    },
+    "diagnose-dev-shop": {
+      "exit_code": 1,
+      "files": {
+        "report.json": "bb901e8e62b32d9dc9c17ecfd412b502bdbb299906de83a86147a96959414077",
+        "summary.md": "e7d25ee95ab13327370caa48deba2bebc36ce597ab558d24b0bfae8945c8a379"
+      },
+      "source_unchanged": true,
+      "stderr": [],
+      "stdout": [
+        "실행 상태: completed / 6409행",
+        "정상 관측: 2017건",
+        "표준화 후보: 4424건",
+        "업무 규칙 위반: 16건",
+        "사람 검토 필요: 9건",
+        "Report: <OUT>/report.json",
+        "Summary: <OUT>/summary.md"
+      ],
+      "summary": {
+        "category_counts": {
+          "business_rule_violation": 16,
+          "human_review": 9,
+          "normal_observation": 2017,
+          "standardization_candidate": 4424
+        },
+        "rows_read": 6409,
+        "status": "completed"
+      }
+    },
+    "diagnose-inventory": {
+      "exit_code": 1,
+      "files": {
+        "report.json": "b135496f51e63c6f98a152f632338b373bc9241cc298ca749d569432f08835a4",
+        "summary.md": "6f653222dc62cc74fb3e2ee7a650899ffb16bbdd0f85e8448d2b751008b372c6"
+      },
+      "source_unchanged": true,
+      "stderr": [],
+      "stdout": [
+        "실행 상태: completed / 6행",
+        "정상 관측: 0건",
+        "표준화 후보: 0건",
+        "업무 규칙 위반: 7건",
+        "사람 검토 필요: 1건",
+        "Report: <OUT>/report.json",
+        "Summary: <OUT>/summary.md"
+      ],
+      "summary": {
+        "category_counts": {
+          "business_rule_violation": 7,
+          "human_review": 1,
+          "normal_observation": 0,
+          "standardization_candidate": 0
+        },
+        "rows_read": 6,
+        "status": "completed"
+      }
+    },
+    "diagnose-missing-config": {
+      "exit_code": 2,
+      "files": {},
+      "source_unchanged": true,
+      "stderr": [
+        "Diagnosis failed: FileNotFoundError: [Errno 2] No such file or directory: 'config/__missing__.json'"
+      ],
+      "stdout": [],
+      "summary": {}
+    }
+  },
+  "generated_with_python": "3.9.25"
+}
