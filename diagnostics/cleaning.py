@@ -1,14 +1,12 @@
 """Create audited CSV copies from fresh, policy-approved diagnosis candidates."""
-from collections import Counter
 import csv
-from datetime import datetime, timezone
-import hashlib
 import json
-from pathlib import Path
 import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
 
+from .classification import CATEGORIES, markdown
 from .engine import diagnose, read_table
-from .classification import markdown, CATEGORIES
 
 
 def dump(path, value):
@@ -81,7 +79,7 @@ def clean(input_path, config, output, encoding='utf-8-sig', delimiter=','):
         row['values'][col] = new
     output.mkdir(parents=True, exist_ok=False)
     manifest = {'cleaner_version': '1.0.0', 'status': 'running',
-                'started_at': datetime.now(timezone.utc).isoformat(),
+                'started_at': datetime.now(UTC).isoformat(),
                 'input': str(source), 'output': str(output), 'config': config,
                 'input_encoding': encoding, 'input_delimiter': delimiter,
                 'output_encoding': 'utf-8', 'output_delimiter': ',',
@@ -116,7 +114,7 @@ def clean(input_path, config, output, encoding='utf-8-sig', delimiter=','):
                 reread = read_table(stage/(name+'.csv'))
                 if original['headers'] != reread['headers'] or len(original['rows']) != len(reread['rows']):
                     raise ValueError('Output changed headers or row count')
-                for row, cleaned in zip(original['rows'], reread['rows']):
+                for row, cleaned in zip(original['rows'], reread['rows'], strict=True):
                     for col, value in row['values'].items():
                         change = ledger.get((name, row['record'], col))
                         expected = change['after'] if change else value
@@ -145,7 +143,7 @@ def clean(input_path, config, output, encoding='utf-8-sig', delimiter=','):
                             before_categories=before['summary']['category_counts'],
                             after_categories=after['summary']['category_counts'],
                             source_unchanged=True, all_cells_verified=True,
-                            completed_at=datetime.now(timezone.utc).isoformat())
+                            completed_at=datetime.now(UTC).isoformat())
             dump(output/'manifest.json', manifest)
             lines = ['# 표준화 실행 결과', '', f'변경 셀: {len(changes)}개 / 행 수: {manifest["rows"]}',
                      '원본 해시·행 수·컬럼·변경 내역과 전체 출력 셀 대조 완료.',
