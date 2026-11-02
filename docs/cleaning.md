@@ -6,7 +6,7 @@ AI 없이 데이터별 진단 설정의 표준화 후보만 새로운 CSV에 적
 
 ```sh
 cd ~/Developer/data-preprocessing-automation
-.venv/bin/python scripts/clean.py data/dirty/development --config config/shop-diagnostics.json
+uv run python scripts/clean.py data/dirty/development --config config/shop-diagnostics.json
 ```
 
 `--output reports/cleaning/새이름`으로 새 결과 폴더를 지정할 수 있다. 기본은 실행별 고유 폴더다. 기존 폴더·원본 폴더와 그 하위 출력은 거부한다. 입력은 CSV 한 파일 또는 폴더, `--encoding`·`--delimiter`를 지원한다. 출력은 UTF-8/BOM 없음, 쉼표, LF이며 CSV 인용·줄바꿈의 바이트 표현은 달라질 수 있지만 헤더·행 순서·셀 문자열은 변경 내역대로 보존한다.
@@ -42,7 +42,7 @@ CSV에는 별도 null 자료형이 없으므로 허용된 NULL/없음 등은 빈
 ## 검증 실행 예
 
 ```sh
-.venv/bin/python -m unittest discover -s tests -p 'test_cleaning.py' -v
+uv run pytest tests/test_cleaning.py -v
 ```
 
 테스트는 원본/미변경 셀·null 원문·여러 줄 셀·앞자리 0 보존, 같은 셀 제안 합치기, 신규 중복/조건부 필수 위반 시 중단, 중복 키 변경 보류, 기존/원본 경로 거부, 잘못된 입력, 구분자/BOM, 재실행 무변경을 검사한다.

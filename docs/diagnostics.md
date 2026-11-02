@@ -8,19 +8,19 @@ Python 표준 라이브러리만 사용한다. AI·MySQL 연결 없이 CSV 파�
 프로젝트 루트에서 기본 프로파일링:
 
 ```sh
-.venv/bin/python scripts/diagnose.py data/dirty/development
+uv run python scripts/diagnose.py data/dirty/development
 ```
 
 쇼핑몰 기준으로 추가 검사:
 
 ```sh
-.venv/bin/python scripts/diagnose.py data/dirty/development --config config/shop-diagnostics.json
+uv run python scripts/diagnose.py data/dirty/development --config config/shop-diagnostics.json
 ```
 
 다른 도메인 재사용 예제:
 
 ```sh
-.venv/bin/python scripts/diagnose.py examples/inventory/input --config examples/inventory/rules.json
+uv run python scripts/diagnose.py examples/inventory/input --config examples/inventory/rules.json
 ```
 
 다른 데이터에는 입력 경로와 JSON 설정을 바꾼다. `--encoding cp949`, `--delimiter ';'`처럼 읽기 설정도 지정할 수 있다.
@@ -106,7 +106,7 @@ v1은 메모리에 CSV 전체를 읽는 소규모 데이터용이다. XLSX·비�
 ## 테스트
 
 ```sh
-.venv/bin/python -m unittest discover -s tests -p 'test_diagnostics.py' -v
+uv run pytest tests/test_diagnostics.py -v
 ```
 
 정상 0, 컬럼별 결측, 조건부 필수값, 복합키·참조, 원문/줄 위치 보존, 파싱·설정 오류 등을 검사한다.
@@ -139,5 +139,5 @@ duplicate_groups는 각 검사의 그룹 ID, 참여 레코드, 동일/충돌 구
 분류 회귀 테스트:
 
 ```sh
-.venv/bin/python -m unittest discover -s tests -p 'test_classification.py' -v
+uv run pytest tests/test_classification.py -v
 ```

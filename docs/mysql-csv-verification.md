@@ -8,14 +8,13 @@ Python 3.9 이상과 MySQL 8 이상을 기준으로 한다.
 프로젝트 폴더의 터미널에서 최초 한 번 환경을 준비한다.
 
 ```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements-mysql.txt
+uv sync --group mysql
 ```
 
 이후 검증할 때 실행한다. 비밀번호는 프롬프트에서 입력하며 화면·인자·보고서에 저장하지 않는다.
 
 ```sh
-.venv/bin/python scripts/compare_mysql_csv.py --database shop_raw --user root
+uv run python scripts/compare_mysql_csv.py --database shop_raw --user root
 ```
 
 기본 연결은 `127.0.0.1:3306`. 다르면 `--host`, `--port`, `--user`로 DBeaver와 같은 서버·계정을 지정한다.

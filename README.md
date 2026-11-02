@@ -2,6 +2,18 @@
 
 여러 사람이 서로 다른 방식으로 작성한 쇼핑몰 CSV를 표준화하는 프로젝트.
 
+## 개발 환경
+
+Python 3.12와 [uv](https://docs.astral.sh/uv/)를 쓴다. 프로젝트 폴더에서:
+
+```sh
+uv sync                     # .venv 생성(Git 제외), uv.lock 기준
+uv run pytest tests         # 테스트 — 경로를 꼭 tests로 지정
+uv run ruff check .         # 린트
+```
+
+`scripts/test_*.py`·`scripts/validate_dirty.py`는 평가 자료를 읽는 데이터셋 구축 검증 도구라 개발 중 실행하지 않는다([개발 계획](docs/development-plan.md) 3·8절).
+
 ## 데이터 사용
 
 - `data/clean/`: 가상 쇼핑몰 정상 기준 CSV 13개. 실제 고객 데이터가 아니다.
