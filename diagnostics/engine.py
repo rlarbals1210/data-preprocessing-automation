@@ -1,12 +1,12 @@
 """Reusable, read-only CSV diagnosis. Standard library only."""
-from collections import Counter, defaultdict
 import csv
-from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
 import hashlib
 import io
-from pathlib import Path
 import re
+from collections import Counter, defaultdict
+from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
 
 CANDIDATES = ['null', 'none', 'n/a', 'na', '없음', '미입력']
 TYPES = {'string', 'integer', 'decimal', 'date', 'datetime'}
@@ -71,7 +71,7 @@ def validate_config(config):
                 raise ConfigError(f'{where}: formats require date/datetime')
             for fmt in rule.get('formats', []):
                 try:
-                    sample = datetime(2000, 1, 2, 3, 4, 5, tzinfo=timezone.utc).strftime(fmt)
+                    sample = datetime(2000, 1, 2, 3, 4, 5, tzinfo=UTC).strftime(fmt)
                     datetime.strptime(sample, fmt)
                 except (ValueError, OverflowError) as exc:
                     raise ConfigError(f'{where}: invalid date/time format {fmt!r}') from exc
@@ -89,7 +89,7 @@ def validate_config(config):
                         if not number.is_finite():
                             raise ValueError('nonfinite')
                     except (InvalidOperation, ValueError):
-                        raise ConfigError(f'{where}.{opt}: finite number required')
+                        raise ConfigError(f'{where}.{opt}: finite number required') from None
                     if rule.get('type') not in {'integer', 'decimal'}:
                         raise ConfigError(f'{where}: min/max require numeric type')
             if 'min' in rule and 'max' in rule and Decimal(str(rule['min'])) > Decimal(str(rule['max'])):
@@ -135,7 +135,7 @@ def read_table(path, encoding='utf-8-sig', delimiter=','):
         if len(values) != len(headers):
             raise ValueError(f'Record {index}: {len(values)} fields, expected {len(headers)}')
         rows.append({'record': index, 'line_start': previous + 1, 'line_end': reader.line_num,
-                     'values': dict(zip(headers, values))})
+                     'values': dict(zip(headers, values, strict=True))})
         previous = reader.line_num
     return {'file': str(path.resolve()), 'sha256': hashlib.sha256(data).hexdigest(),
             'headers': headers, 'rows': rows}
@@ -329,7 +329,7 @@ def diagnose(input_path, config=None, encoding='utf-8-sig', delimiter=','):
                     issue(name, row, ref['columns'], 'reference', 'warning',
                           f'No matching key in {target}; formatting may affect matching', 'configured')
 
-    from .classification import classify, CATEGORIES
+    from .classification import CATEGORIES, classify
     duplicate_groups = classify(issues, tables, ready)
     category_counts = {key: sum(i['category'] == key for i in issues) for key in CATEGORIES}
     severity_counts = dict(Counter(i['severity'] for i in issues))
