@@ -1,4 +1,4 @@
-node_modules/
+node_modules
 __pycache__/
 .DS_Store
 previews/
@@ -19,6 +19,8 @@ deliverables/evaluation-answers.zip
 deliverables/service-inputs.zip
 data/clean/
 data/dirty/evaluation/
+# 생성 중간 파일 — 개발·평가 입력을 함께 담음 (scripts/prepare_dirty.py)
+matrices.json
 
 # 실행 데이터
 workspace/
