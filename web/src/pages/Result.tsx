@@ -3,7 +3,7 @@ import { IconArrowRight, IconDownload } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, type Run } from '../api';
-import { CATEGORY, CATEGORY_ORDER, CHANGE, CODE, RESULT_STATUS, fmt, where } from '../labels';
+import { CATEGORY, CATEGORY_ORDER, CHANGE, CODE, PUBLISH_REASON, RESULT_STATUS, fmt, where } from '../labels';
 
 const PAGE = 25;
 
@@ -25,6 +25,11 @@ export default function Result({ run }: { run: Run }) {
         <Badge size="lg" variant="light" color={RESULT_STATUS[x.status]?.color}>
           {RESULT_STATUS[x.status]?.label}
         </Badge>
+        {x.result_version && (
+          <Badge size="lg" variant="outline" color="teal">
+            결과 버전 {x.result_version}
+          </Badge>
+        )}
         {x.attempt && (
           <Badge size="lg" variant="outline" color="gray">
             시도 {x.attempt}
@@ -120,18 +125,26 @@ export default function Result({ run }: { run: Run }) {
                 </Badge>
               </Group>
               <Stack gap={4} mt="sm">
-                {[...x.files, { name: 'changes.csv', bytes: 0 }].map((f) => (
+                {[...x.files, { name: 'changes.csv', rows: -1 }].map((f) => (
                   <Anchor key={f.name} href={api.fileUrl(run.id, f.name)} fz="sm">
                     <Group gap={6}>
                       <IconDownload size={14} />
                       {f.name}
-                      {f.bytes > 0 && (
+                      {f.rows >= 0 && (
                         <Text span c="dimmed" fz="xs">
-                          {fmt(Math.ceil(f.bytes / 1024))} KB
+                          {fmt(f.rows)}행
                         </Text>
                       )}
                     </Group>
                   </Anchor>
+                ))}
+                {Object.entries(x.excluded_tables ?? {}).map(([t, reason]) => (
+                  <Text key={t} fz="sm" c="dimmed">
+                    <Text span ff="monospace">
+                      {t}
+                    </Text>{' '}
+                    발행 제외 · {PUBLISH_REASON[reason] ?? reason}
+                  </Text>
                 ))}
               </Stack>
             </Card>

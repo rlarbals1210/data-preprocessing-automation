@@ -19,6 +19,7 @@ from pathlib import Path
 
 from diagnostics.engine import diagnose, read_table
 from prep import attempt as attempts
+from prep import publish
 from prep.apply import ApplyError, build_apply_plan, verify_plan
 from prep.apply import candidates as apply_candidates
 from prep.apply import groups as apply_groups
@@ -29,7 +30,7 @@ from prep.runs import ApprovalError, RunLedger
 from prep.snapshot import SnapshotError, create_snapshot, load_snapshot
 from prep.store import Store
 from prep.upload import BlobStore, UploadError, ingest
-from prep.view import Locator, ViewInput, build_view, strip_extras
+from prep.view import Locator, ViewInput, build_view
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SETS = {"shop": "쇼핑몰 표준", "none": "설정 없음"}
@@ -404,23 +405,29 @@ class Workspace:
                 if not f["read_error"]:
                     self.blobs.get(f["sha256"])  # 보관 원본 해시 대조
             audit = attempts.audit(attempt, view, self.guard, plan["allow"], run["view_hash"])  # AC-07-1
-        except Exception as exc:  # 정제·감사 실패는 실행 결과로 보여 준다(결과 미발행)
+            remaining = out["after_categories"]
+            status = "completed_with_issues" if remaining.get("business_rule_violation") or remaining.get(
+                "human_review") else "completed"
+            stage = "publish_failed"  # M1-10c: 결과 파일 → DB 트랜잭션 하나
+            lineage = json.loads((view / "lineage.json").read_text(encoding="utf-8"))
+            manifest = publish.write_files(attempt, lineage, (run.get("plan") or {}).get("tables", {}),
+                                           {f["item_id"]: f["name"] for f in run["files"]}, self.guard)
+            version = publish.record(self.store, run["db_run"], attempt, manifest, status, audit, self.guard)
+        except Exception as exc:  # 정제·감사·발행 실패는 실행 결과로 보여 준다(결과 미발행)
             message = f"{type(exc).__name__}: {exc}"
             attempts.finish(self.store, attempt, stage, message, getattr(exc, "audit", None))
             run.update(result={"status": "failed", "error": message, "attempt": attempt.number, "stage": stage})
             self._transition(run, "failed", stage)
             self.save(run)
             return run["result"]
-        attempts.finish(self.store, attempt, "engine_ok", None, audit)
-        remaining = out["after_categories"]
-        status = "completed_with_issues" if remaining.get("business_rule_violation") or remaining.get(
-            "human_review") else "completed"
-        self._transition(run, status)
+        run["status"] = status
         run.update(result={"status": status, "changed_cells": out["changed_cells"],
                                               "rows": out["rows"], "before": out["before_categories"],
                                               "after": remaining, "not_approved": out["not_approved_cells"],
                                               "plan_hash": plan["hash"], "approval": approval,
-                                              "attempt": attempt.number, "audit": audit})
+                                              "attempt": attempt.number, "audit": audit,
+                                              "result_version": version,
+                                              "excluded_tables": manifest["excluded_tables"]})
         self.save(run)
         return run["result"]
 
@@ -428,17 +435,21 @@ class Workspace:
         run = self.load(run_id)
         if not run["result"]:
             raise FlowError("not_executed", "아직 실행하지 않았다", 409)
+        version = publish.latest(self.store, run["db_run"])  # 완료 판정은 result_version 행
         files = []
-        data = self._engine_dir(run) / "data"
-        if data.is_dir():
-            files = [{"name": p.name, "bytes": p.stat().st_size} for p in sorted(data.glob("*.csv"))]
-        return run["result"] | {"files": files}
+        if version:
+            manifest = json.loads(self.guard.safe_join(self.root, version["manifest_path"]).read_text(encoding="utf-8"))
+            files = [{"name": n, "bytes": None, "rows": m["rows"]} for n, m in manifest["files"].items()
+                     if n.endswith(".csv") and n != "changes.csv"]
+        return run["result"] | {"files": files, "published": version is not None}
 
     def _engine_dir(self, run: dict) -> Path:
-        n = (run.get("result") or {}).get("attempt")
-        if not n or run["result"]["status"] == "failed":
-            return self.run_dir(run["id"]) / "__no_result__"
-        return self.guard.safe_join(self.run_dir(run["id"]), f"attempt-{int(n)}", "engine")
+        """발행된 결과 버전의 시도 폴더(엔진 산출물). 결과 버전이 없으면 결과 없음."""
+        version = publish.latest(self.store, run["db_run"])
+        if version is None:
+            raise FlowError("not_executed", "발행된 결과가 없다", 409)
+        path = self.store.conn.execute("SELECT path FROM attempt WHERE id = ?", (version["attempt_id"],)).fetchone()[0]
+        return self.guard.safe_join(self.root, path, "engine")
 
     def changes(self, run_id: str, offset: int, limit: int) -> dict:
         path = self._engine_dir(self.load(run_id)) / "changes.json"
@@ -457,18 +468,16 @@ class Workspace:
         return {"total": len(items), "items": out}
 
     def download(self, run_id: str, name: str) -> bytes:
-        base = self._engine_dir(self.load(run_id))
-        if name == "changes.csv":
-            path = base / "changes.csv"
-        elif FILE_NAME.fullmatch(name):
-            path = self.guard.safe_join(base, "data", name) if base.name == "engine" else base / name
-        else:
+        run = self.load(run_id)
+        version = publish.latest(self.store, run["db_run"])
+        if version is None or not (FILE_NAME.fullmatch(name) or name == "absent-cells.json"):
             raise FlowError("file_not_found", "파일이 없다", 404)
-        if not path.is_file():
-            raise FlowError("file_not_found", "파일이 없다", 404)
-        if name == "changes.csv":
-            return path.read_bytes()
-        return strip_extras(path.read_text(encoding="utf-8")).encode("utf-8")  # 보조 컬럼은 출력하지 않는다
+        try:
+            return publish.read_verified(self.guard, self.root, version, name)  # 해시 재대조
+        except FileNotFoundError as exc:
+            raise FlowError("file_not_found", "파일이 없다", 404) from exc
+        except publish.PublishError as exc:
+            raise FlowError("result_tampered", str(exc), 409) from exc
 
 
 def _empty_plan_hash() -> str:

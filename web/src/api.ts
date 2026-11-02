@@ -45,6 +45,8 @@ export type ResultSummary = {
   after?: Record<string, number>;
   not_approved?: number;
   attempt?: number;
+  result_version?: number;
+  excluded_tables?: Record<string, string>;
   stage?: string;
   audit?: { passed: boolean; checked_cells: number; changed_cells: number; allowed_cells: number };
   error?: string;
@@ -194,7 +196,8 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approval }),
     }),
-  result: (id: string) => req<ResultSummary & { files: { name: string; bytes: number }[] }>(`/runs/${id}/result`),
+  result: (id: string) =>
+    req<ResultSummary & { files: { name: string; rows: number }[]; published: boolean }>(`/runs/${id}/result`),
   changes: (id: string, offset: number, limit: number) => req<Page<Change>>(`/runs/${id}/changes${q({ offset, limit })}`),
   fileUrl: (id: string, name: string) => `/api/runs/${id}/files/${encodeURIComponent(name)}`,
 };

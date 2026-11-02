@@ -290,6 +290,31 @@ MIGRATIONS.append(
     """)
 
 
+MIGRATIONS.append(
+    # 4: M1-10c 결과 버전 — 완료 판정의 유일한 기준
+    f"""
+    CREATE TABLE result_version (
+        id INTEGER PRIMARY KEY,
+        run_id INTEGER REFERENCES run(id),
+        kind TEXT NOT NULL CHECK (kind IN ('cleaned', 'restore')),
+        restored_from INTEGER REFERENCES result_version(id),
+        attempt_id INTEGER UNIQUE REFERENCES attempt(id),
+        data_hashes TEXT NOT NULL CHECK (json_valid(data_hashes) AND json_type(data_hashes) = 'object'),
+        manifest_path TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT {_NOW},
+        CHECK ((kind = 'cleaned') = (attempt_id IS NOT NULL)),
+        CHECK ((kind = 'restore') = (restored_from IS NOT NULL)));
+
+    {_guards(("result_version",), ("result_version",))}
+
+    CREATE TRIGGER result_version_event AFTER INSERT ON result_version
+    BEGIN
+        INSERT INTO event (subject_type, subject_id, kind, payload)
+        VALUES ('run', NEW.run_id, 'result_published', json_object('result_version', NEW.id, 'kind', NEW.kind));
+    END;
+    """)
+
+
 class StoreError(RuntimeError):
     pass
 
