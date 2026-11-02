@@ -1,0 +1,11 @@
+[project]
+name = "data-preprocessing-automation"
+version = "0.0.0"
+description = "여러 담당자가 만든 쇼핑몰 데이터를 승인 기반으로 표준화하는 로컬 프로토타입"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+# 기본 수집은 tests/로 한정한다. scripts/test_*.py는 평가 자료를 읽는
+# 데이터셋 구축 검증 도구라 수집·실행하지 않는다 (docs/development-plan.md 3절).
+testpaths = ["tests"]
+pythonpath = ["."]
