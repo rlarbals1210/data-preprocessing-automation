@@ -1,8 +1,9 @@
 """Policy-driven presentation; suggestions never mutate input values."""
 import re
 from collections import Counter
-from datetime import datetime
 from decimal import Decimal
+
+from .transforms import TRANSFORMS
 
 CATEGORIES = {
     'normal_observation': '정상 관측',
@@ -16,21 +17,8 @@ def proposal(value, rule):
     from .engine import normalize, parse
     candidate = normalize(value, rule)
     policy = rule.get('standardization')
-    if policy == 'krw_integer':
-        if re.fullmatch(r'[+-]?(?:[0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?: ?원)?', candidate):
-            candidate = re.sub(r' ?원$', '', candidate).replace(',', '')
-    elif policy == 'kr_mobile':
-        compact = re.sub(r'[ ()-]', '', candidate)
-        if re.fullmatch(r'010[0-9]{8}', compact):
-            candidate = compact[:3] + '-' + compact[3:7] + '-' + compact[7:]
-    elif policy == 'iso_datetime':
-        # Only unambiguous YMD with explicit UTC offset; never infer timezone.
-        for fmt in ('%Y-%m-%d %H:%M:%S%z', '%Y/%m/%d %H:%M:%S%z'):
-            try:
-                candidate = datetime.strptime(candidate, fmt).isoformat()
-                break
-            except ValueError:
-                pass
+    if policy:
+        candidate = TRANSFORMS[policy].func(candidate)
     if candidate == value:
         return None
     try:

@@ -146,6 +146,7 @@ def test_real_shop_set(tmp_path):
     guard = Guard([ws], project_root=ROOT)
     a = snap.create_snapshot(ROOT, "shop", ws, guard)
     assert set(a.files) == {"config/normalization-policy.json", "config/sets/shop/aliases.json",
+                            "config/sets/shop/transforms.json",
                             "config/sets/shop/legacy-header-map.json",
                             "config/sets/shop/logical-diagnostics.json", "schema.json"}
     assert snap.create_snapshot(ROOT, "shop", ws, guard).hash == a.hash

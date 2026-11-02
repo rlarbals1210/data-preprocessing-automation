@@ -284,7 +284,7 @@ class Workspace:
             items = [i for i in items if i["table"] == table]
         page = items[offset: offset + limit]
         keep = ("table", "record", "columns", "values", "code", "severity", "category", "suggested_value",
-                "category_reason", "source")
+                "category_reason", "source", "detail")
         names = {f["item_id"]: f["name"] for f in self.load(run_id)["files"]}
         out = []
         for i in page:

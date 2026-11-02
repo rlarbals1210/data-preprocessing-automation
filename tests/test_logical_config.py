@@ -62,8 +62,11 @@ def test_rules_identical_except_names():
         cmap = HEADER_MAP["tables"][name]["columns"]
         for col, rule in spec["columns"].items():
             new = LOGICAL["tables"][name]["columns"][cmap[col]]
-            stripped = {k: v for k, v in rule.items() if k != "required_if"}
-            assert {k: v for k, v in new.items() if k != "required_if"} == stripped
+            stripped = {k: v for k, v in rule.items() if k not in ("required_if", "standardization")}
+            assert {k: v for k, v in new.items() if k not in ("required_if", "standardization")} == stripped
+            if "standardization" in rule:
+                assert new["standardization"] == blc.POLICY_UPGRADE.get(rule["standardization"],
+                                                                       rule["standardization"])
             if "required_if" in rule:
                 assert new["required_if"] == {"column": cmap[rule["required_if"]["column"]],
                                               "in": rule["required_if"]["in"]}
@@ -106,6 +109,7 @@ def test_same_diagnosis_with_logical_headers(tmp_path):
         rows[0] = [cmap[h] for h in rows[0]]
         with (tmp_path / path.name).open("w", encoding="utf-8", newline="") as f:
             csv.writer(f, lineterminator="\n").writerows(rows)
+    # 개발 입력에는 새 정책 ID로만 바뀌는 값(₩·+82·점 구분 날짜)이 없어 결과가 같아야 한다.
     before, after = diagnose(dev, SOURCE), diagnose(tmp_path, LOGICAL)
 
     def key(report, rename):

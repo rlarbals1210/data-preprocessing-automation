@@ -17,6 +17,7 @@ import csv
 import hashlib
 import io
 import json
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -25,6 +26,8 @@ from prep.guard import Guard
 
 EXTRAS = "__extras_digest__"
 ABSENT = "\0absent"
+# 시간대 없는 날짜·시각(결정 Q8): 엔진은 형식 해석 실패 → 사람 검토로 둔다. 화면 이유만 보강한다(이중 집계 없음).
+_NAIVE_DATETIME = re.compile(r"\d{4}[-/.]\d{1,2}[-/.]\d{1,2}(?:[ T]\d{1,2}:\d{2}(?::\d{2}(?:\.\d+)?)?)?")
 
 
 class ViewError(ValueError):
@@ -163,6 +166,9 @@ class Locator:
             issue["values"] = {k: v for k, v in issue["values"].items() if k != EXTRAS}
             if issue["table"] in self.tables:
                 issue["source"] = self.source(issue["table"], issue["record"], issue["columns"])
+            if issue["code"] == "type" and len(issue["columns"]) == 1 and _NAIVE_DATETIME.fullmatch(
+                    issue["values"][issue["columns"][0]].strip()):
+                issue["detail"] = "timezone_missing"
         for g in out["duplicate_groups"]:
             g["columns"] = [c for c in g["columns"] if c != EXTRAS]
             g["differing_columns"] = [c for c in g["differing_columns"] if c != EXTRAS]

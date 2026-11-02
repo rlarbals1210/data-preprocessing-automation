@@ -31,7 +31,7 @@
             "없음",
             "N/A"
           ],
-          "standardization": "kr_mobile"
+          "standardization": "kr_mobile_intl"
         },
         "customer_status": {
           "required": true,
@@ -56,12 +56,12 @@
         "joined_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "updated_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         }
       },
       "unique": [
@@ -93,7 +93,7 @@
           "required": true,
           "type": "string",
           "pattern": "010-[0-9]{4}-[0-9]{4}",
-          "standardization": "kr_mobile"
+          "standardization": "kr_mobile_intl"
         },
         "postal_code": {
           "required": true,
@@ -125,12 +125,12 @@
         "created_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "updated_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         }
       },
       "unique": [
@@ -228,12 +228,12 @@
         "created_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "updated_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         }
       },
       "unique": [
@@ -275,7 +275,7 @@
           "required": true,
           "type": "integer",
           "min": 0,
-          "standardization": "krw_integer"
+          "standardization": "krw_integer_symbol"
         },
         "weight_g": {
           "required": false,
@@ -295,12 +295,12 @@
         "created_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "updated_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         }
       },
       "unique": [
@@ -333,7 +333,7 @@
         "ordered_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "order_channel": {
           "required": true,
@@ -365,7 +365,7 @@
           "required": true,
           "type": "string",
           "pattern": "010-[0-9]{4}-[0-9]{4}",
-          "standardization": "kr_mobile"
+          "standardization": "kr_mobile_intl"
         },
         "postal_code": {
           "required": true,
@@ -398,13 +398,13 @@
           "required": true,
           "type": "integer",
           "min": 0,
-          "standardization": "krw_integer"
+          "standardization": "krw_integer_symbol"
         },
         "order_total": {
           "required": true,
           "type": "integer",
           "min": 0,
-          "standardization": "krw_integer"
+          "standardization": "krw_integer_symbol"
         },
         "cancelled_at": {
           "required": false,
@@ -415,12 +415,12 @@
               "cancelled"
             ]
           },
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "updated_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         }
       },
       "unique": [
@@ -471,19 +471,19 @@
           "required": true,
           "type": "integer",
           "min": 0,
-          "standardization": "krw_integer"
+          "standardization": "krw_integer_symbol"
         },
         "discount_amount": {
           "required": true,
           "type": "integer",
           "min": 0,
-          "standardization": "krw_integer"
+          "standardization": "krw_integer_symbol"
         },
         "line_total": {
           "required": true,
           "type": "integer",
           "min": 0,
-          "standardization": "krw_integer"
+          "standardization": "krw_integer_symbol"
         }
       },
       "unique": [
@@ -547,17 +547,17 @@
           "required": true,
           "type": "integer",
           "min": 0,
-          "standardization": "krw_integer"
+          "standardization": "krw_integer_symbol"
         },
         "requested_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "paid_at": {
           "required": false,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "failure_code": {
           "required": false,
@@ -613,7 +613,7 @@
         "created_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "shipped_at": {
           "required": false,
@@ -625,7 +625,7 @@
               "delivered"
             ]
           },
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "delivered_at": {
           "required": false,
@@ -636,7 +636,7 @@
               "delivered"
             ]
           },
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         }
       },
       "unique": [
@@ -728,7 +728,7 @@
         "requested_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "received_at": {
           "required": false,
@@ -740,7 +740,7 @@
               "closed"
             ]
           },
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "closed_at": {
           "required": false,
@@ -753,7 +753,7 @@
               "cancelled"
             ]
           },
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         }
       },
       "unique": [
@@ -882,17 +882,17 @@
           "required": true,
           "type": "integer",
           "min": 0,
-          "standardization": "krw_integer"
+          "standardization": "krw_integer_symbol"
         },
         "requested_at": {
           "required": true,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "refunded_at": {
           "required": false,
           "type": "datetime",
-          "standardization": "iso_datetime"
+          "standardization": "iso_datetime_ymd"
         },
         "failure_code": {
           "required": false,

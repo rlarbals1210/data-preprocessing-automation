@@ -25,6 +25,10 @@ class MappingError(ValueError):
     pass
 
 
+# 논리 설정은 정책 문서의 지원 변환을 모두 담은 새 정책 ID를 쓴다(TD 6절, 결정 Q11). 원 설정은 기존 ID 그대로.
+POLICY_UPGRADE = {"kr_mobile": "kr_mobile_intl", "krw_integer": "krw_integer_symbol", "iso_datetime": "iso_datetime_ymd"}
+
+
 def schema_columns(schema):
     return {t: [f["name"] for f in spec["fields"]] for t, spec in schema["tables"].items()}
 
@@ -69,6 +73,8 @@ def convert(config, header_map, schema):
             rule = copy.deepcopy(rule)
             if "required_if" in rule:
                 rule["required_if"]["column"] = cmap[rule["required_if"]["column"]]
+            if "standardization" in rule:
+                rule["standardization"] = POLICY_UPGRADE.get(rule["standardization"], rule["standardization"])
             columns[cmap[col]] = rule
         new["columns"] = columns
         if "unique" in spec:

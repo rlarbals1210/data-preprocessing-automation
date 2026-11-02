@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "note": "기록 전용(실행 설정 아님). 실행에 쓰이는 것은 logical-diagnostics.json의 standardization 값뿐이다. 근거는 서비스에 제공되는 공개 정책 문서이며 평가셋 결과를 보고 추가한 것이 아니다(TD 6절, 결정 Q11, 2026-11-02).",
+  "transforms": [
+    {"id": "krw_integer", "policy_key": "money", "covers": ["쉼표", "원"], "status": "기존", "tests": ["tests/test_transforms.py::test_transform_pairs[krw_integer-*]"]},
+    {"id": "krw_integer_symbol", "policy_key": "money", "covers": ["쉼표", "원", "₩"], "status": "M1-8 추가", "basis": "money: 'KRW 정수. 쉼표·원·₩ 표기는 숫자값 보존하여 정리.'", "tests": ["tests/test_transforms.py::test_transform_pairs[krw_integer_symbol-*]"]},
+    {"id": "kr_mobile", "policy_key": "phone", "covers": ["공백", "하이픈", "괄호"], "status": "기존", "tests": ["tests/test_transforms.py::test_transform_pairs[kr_mobile-*]"]},
+    {"id": "kr_mobile_intl", "policy_key": "phone", "covers": ["공백", "하이픈", "괄호", "명시적 +82"], "status": "M1-8 추가", "basis": "phone: '공백·하이픈·괄호·명시적 +82 국가코드만 정리. 11자리 복원 추측 금지.'", "tests": ["tests/test_transforms.py::test_transform_pairs[kr_mobile_intl-*]"]},
+    {"id": "iso_datetime", "policy_key": "datetime", "covers": ["YYYY-MM-DD hh:mm:ss±hh:mm", "YYYY/MM/DD hh:mm:ss±hh:mm"], "status": "기존", "tests": ["tests/test_transforms.py::test_transform_pairs[iso_datetime-*]"]},
+    {"id": "iso_datetime_ymd", "policy_key": "datetime", "covers": ["기존 두 형식", "YYYY.MM.DD 공백·T 구분", "YYYY/MM/DD T 구분"], "status": "M1-8 추가", "basis": "datetime: '시간대 +09:00이 명시되고 연-월-일 순서가 명확한 표현만 ISO로 통일. 07/08/26 같은 모호한 날짜는 검토.'", "tests": ["tests/test_transforms.py::test_transform_pairs[iso_datetime_ymd-*]"]}
+  ],
+  "not_transformed": [
+    {"case": "시간대 없는 날짜·시각", "handling": "형식 해석 실패 → 사람 검토(결정 Q8, T-07)"},
+    {"case": "연도가 앞에 오지 않는 날짜(07/08/26 등)", "handling": "사람 검토"},
+    {"case": "11자리가 아닌 전화번호·국가코드 없는 국제 형식", "handling": "추정하지 않음 → 사람 검토"},
+    {"case": "phone의 0·미확인", "handling": "의미 불확실 → 사람 검토"}
+  ]
+}

@@ -88,6 +88,7 @@ export type Issue = {
   suggested_value: string | null;
   category_reason: string;
   source?: Source | null;
+  detail?: string | null;
 };
 export type PreviewGroup = {
   table: string;

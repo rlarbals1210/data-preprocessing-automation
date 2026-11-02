@@ -220,6 +220,7 @@ export default function Diagnosis({ run }: { run: Run }) {
                     <Table.Td>
                       <Badge variant="light" color={CATEGORY[i.category].color}>
                         {CODE[i.code] ?? i.code}
+                        {i.detail === 'timezone_missing' ? ' · 시간대 없음' : ''}
                       </Badge>
                     </Table.Td>
                     <Table.Td>

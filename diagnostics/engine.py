@@ -59,11 +59,11 @@ def validate_config(config):
                 if opt in rule:
                     strings(rule[opt], f'{where}.{opt}', opt != 'missing_values')
             if 'standardization' in rule:
-                policies = {'krw_integer': 'integer', 'kr_mobile': 'string', 'iso_datetime': 'datetime'}
+                from .transforms import TRANSFORMS
                 policy = rule['standardization']
-                if not isinstance(policy, str) or policy not in policies:
+                if not isinstance(policy, str) or policy not in TRANSFORMS:
                     raise ConfigError(f'{where}: unsupported standardization policy')
-                if rule.get('type', 'string') != policies[policy]:
+                if rule.get('type', 'string') != TRANSFORMS[policy].type:
                     raise ConfigError(f'{where}: standardization policy/type mismatch')
             if rule.get('type', 'string') not in TYPES:
                 raise ConfigError(f'{where}: unsupported type')
