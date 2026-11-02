@@ -68,7 +68,7 @@ export default function RunPage() {
       </Stepper>
       <Routes>
         <Route index element={<Navigate to={start} replace />} />
-        <Route path="mapping" element={<Mapping run={r} />} />
+        <Route path="mapping" element={<Mapping key={r.id} run={r} />} />
         <Route path="diagnosis" element={<Diagnosis run={r} />} />
         <Route path="preview" element={<Preview run={r} />} />
         <Route path="result" element={<Result run={r} />} />

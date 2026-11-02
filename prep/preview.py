@@ -17,8 +17,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from diagnostics.cleaning import clean
-from diagnostics.engine import diagnose, validate_config
+from diagnostics.engine import diagnose, read_table, validate_config
 from prep.guard import Guard
+from prep.mapping import Catalog, propose, validate_final
 from prep.snapshot import create_snapshot
 from prep.store import Store
 from prep.upload import BlobStore, UploadError, ingest
@@ -55,7 +56,32 @@ class Workspace:
         return path
 
     def load(self, run_id: str) -> dict:
-        return json.loads((self.run_dir(run_id) / "run.json").read_text(encoding="utf-8"))
+        run = json.loads((self.run_dir(run_id) / "run.json").read_text(encoding="utf-8"))
+        if any("mapping" not in f for f in run["files"]):
+            raise FlowError("legacy_run", "매핑(M1-5) 이전에 만든 실행이다. 새로 업로드하세요", 410)
+        return run
+
+    def view(self, run_id: str) -> dict:
+        """화면용: 실행 + 표준 목록(테이블 → 컬럼, 필수 컬럼)."""
+        run = self.load(run_id)
+        cat = self._catalog(run)
+        run["catalog"] = None if cat is None else {
+            t: {"columns": cols, "required": cat.required.get(t, [])} for t, cols in cat.columns.items()}
+        return run
+
+    def _catalog(self, run: dict) -> Catalog | None:
+        if not run["snapshot"]:
+            return None
+        snap = self.guard.safe_join(self.root, "config-snapshots", run["snapshot"])
+        read = lambda rel: json.loads((snap / rel).read_text(encoding="utf-8"))  # noqa: E731
+        return Catalog(read("schema.json"), read("config/sets/shop/logical-diagnostics.json"),
+                       read("config/sets/shop/aliases.json"))
+
+    def _rows(self, f: dict) -> list[dict]:
+        self.blobs.get(f["sha256"])
+        table = read_table(self.blobs.path(f["sha256"]), f["read_options"]["encoding"],
+                           f["read_options"]["delimiter"])
+        return [r["values"] for r in table["rows"]]
 
     def save(self, run: dict) -> None:
         path = self.guard.safe_join(self.runs, run["id"], "run.json")
@@ -68,6 +94,8 @@ class Workspace:
         for p in sorted(self.runs.iterdir(), reverse=True):
             if RUN_ID.fullmatch(p.name) and (p / "run.json").is_file():
                 r = json.loads((p / "run.json").read_text(encoding="utf-8"))
+                if any("mapping" not in f for f in r["files"]):
+                    continue  # 매핑 이전 실행은 목록에서 뺀다
                 items.append({k: r.get(k) for k in ("id", "created_at", "set", "source", "status", "rows", "result")}
                              | {"file_count": len(r["files"])})
         return items
@@ -87,9 +115,26 @@ class Workspace:
         if snapshot:
             self.store.add_config_snapshot(snapshot.hash, "shop", f"config-snapshots/{snapshot.hash}",
                                            list(snapshot.files))
-        header_map = _load_header_map(snapshot.path) if snapshot else {}
-        schema = json.loads((snapshot.path / "schema.json").read_text(encoding="utf-8")) if snapshot else None
-        entries = [_inspect(item, header_map, schema) for item in uploaded["items"]]
+        cat = self._catalog({"snapshot": snapshot.hash}) if snapshot else None
+        entries = []
+        for item in uploaded["items"]:
+            f = {"item_id": item["id"], "name": item["filename"], "sha256": item["sha256"], "bytes": item["bytes"],
+                 "read_options": {"encoding": "utf-8-sig", "delimiter": ","}, "rows": item["rows"],
+                 "headers": item["headers"], "read_error": None, "proposal": None, "mapping": None,
+                 "confirmed": False}
+            if item["read_status"] != "ok":
+                e = item["read_errors"][0]
+                f["read_error"] = (f"{e['record']}번째 레코드: " if e.get("record") else "") + e["reason"]
+                f["mapping"] = {"table": None, "columns": {}}
+                f["confirmed"] = True  # 읽기 실패 파일은 실행 대상에서 빠진다(AC-01-3)
+            elif cat is None:
+                f["mapping"] = {"table": item["filename"][:-4], "columns": {h: h for h in item["headers"]}}
+                f["confirmed"] = True  # 설정 없음: 프로파일만
+            else:
+                f["proposal"] = propose(item["filename"], item["headers"], self._rows(f), cat)
+                f["mapping"] = _mapping_of(f["proposal"])
+                f["confirmed"] = False  # 구조 승인은 매번 사용자가 한다
+            entries.append(f)
         run = {"id": run_id, "created_at": now.isoformat(), "set": set_name, "source": source.strip(),
                "batch_id": uploaded["batch_id"], "status": "uploaded",
                "snapshot": snapshot.hash if snapshot else None, "files": entries,
@@ -97,16 +142,73 @@ class Workspace:
         self.save(run)
         return run
 
+    # ---- 매핑 (M1-5) ----
+    def propose_table(self, run_id: str, item_id: int, table: str) -> dict:
+        run = self.load(run_id)
+        cat = self._catalog(run)
+        f = next((x for x in run["files"] if x["item_id"] == item_id), None)
+        if cat is None or f is None or f["read_error"] or table not in cat.columns:
+            raise FlowError("bad_mapping", "제안할 수 없는 파일 또는 테이블")
+        return propose(f["name"], f["headers"], self._rows(f), cat, table=table)
+
+    def confirm_mapping(self, run_id: str, files: list[dict]) -> dict:
+        """구조 승인: 사용자가 확인·수정한 매핑을 확정한다. 자동 제안(proposal)은 그대로 둔다(AC-03-2)."""
+        run = self.load(run_id)
+        cat = self._catalog(run)
+        if cat is None:
+            raise FlowError("bad_mapping", "설정 없음 실행은 매핑이 없다")
+        by_id = {f["item_id"]: f for f in run["files"]}
+        if {x.get("item_id") for x in files} != {f["item_id"] for f in run["files"] if not f["read_error"]}:
+            raise FlowError("bad_mapping", "읽기에 성공한 모든 파일의 매핑이 필요하다")
+        errors, targets = [], []
+        for x in files:
+            f = by_id[x["item_id"]]
+            table, columns = x.get("table"), x.get("columns") or {}
+            if table is None:
+                continue  # 실행 대상에서 제외
+            errs = validate_final(table, columns, f["headers"], cat)
+            errors += [f"{f['name']}: {e}" for e in errs]
+            targets.append(table)
+        dup = sorted(t for t, n in Counter(targets).items() if n > 1)
+        if dup:
+            errors.append(f"같은 표준 테이블로 가는 파일이 여럿이다: {dup}")
+        if not targets:
+            errors.append("실행 대상 파일이 없다")
+        if errors:
+            raise FlowError("bad_mapping", "; ".join(errors))
+        changed = False
+        for x in files:
+            f = by_id[x["item_id"]]
+            new = {"table": x.get("table"), "columns": dict(x.get("columns") or {}) if x.get("table") else {}}
+            changed = changed or new != f["mapping"]
+            f.update(mapping=new, confirmed=True)
+        if changed and run["status"] != "uploaded":  # AC-03-5: 매핑이 바뀌면 이전 진단·결과 무효
+            base = self.run_dir(run_id)
+            for name in ("report.json", "engine-config.json"):
+                (base / name).unlink(missing_ok=True)
+            for sub in ("result", "view"):
+                if (base / sub).exists():
+                    _remove_tree(base / sub)
+            run.update(status="uploaded", plan=None, result=None)
+        self.store.record_event("batch", run["batch_id"], "mapping_confirmed",
+                                {"run": run_id, "changed": changed,
+                                 "auto_unchanged": all(f["mapping"] == _mapping_of(f["proposal"])
+                                                       for f in run["files"] if f["proposal"])})
+        self.save(run)
+        return self.view(run_id)
+
     # ---- 진단 ----
     def diagnose(self, run_id: str) -> dict:
         run = self.load(run_id)
         if "batch_id" not in run:
             raise FlowError("legacy_run", "원본 보관(M1-4) 이전에 만든 실행이라 다시 진단할 수 없다. 새로 업로드하세요", 409)
         base = self.run_dir(run_id)
-        readable = [f for f in run["files"] if f["read_error"] is None]
+        if not all(f["confirmed"] for f in run["files"]):
+            raise FlowError("mapping_unconfirmed", "매핑을 확정해야 진단할 수 있다", 409)  # AC-03-3
+        readable = [f for f in run["files"] if f["read_error"] is None and f["mapping"]["table"]]
         if not readable:
-            raise FlowError("nothing_readable", "읽을 수 있는 파일이 없다")
-        tables = Counter(f["table"] for f in readable)
+            raise FlowError("nothing_readable", "진단할 파일이 없다")
+        tables = Counter(f["mapping"]["table"] for f in readable)
         dup = [t for t, n in tables.items() if n > 1]
         if dup:
             raise FlowError("duplicate_table", f"같은 표준 테이블로 가는 파일이 여럿이다: {dup}")
@@ -117,12 +219,12 @@ class Workspace:
         view.mkdir(exist_ok=True)
         for f in readable:
             data = self.blobs.get(f["sha256"])  # 보관 원본(해시 대조)
-            _write_view(data, f, self.guard.safe_join(view, f["table"] + ".csv"))
+            _write_view(data, f, self.guard.safe_join(view, f["mapping"]["table"] + ".csv"))
         config, skipped = {}, []
         if run["snapshot"]:
             snap = self.guard.safe_join(self.root, "config-snapshots", run["snapshot"])
             logical = json.loads((snap / "config/sets/shop/logical-diagnostics.json").read_text(encoding="utf-8"))
-            present = {f["table"]: {c["logical"] for c in f["headers"] if c["logical"]} for f in readable}
+            present = {f["mapping"]["table"]: {v for v in f["mapping"]["columns"].values() if v} for f in readable}
             config, skipped = plan(logical, present)
         report = diagnose(view, config)
         (base / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
@@ -250,38 +352,20 @@ def _remove_tree(path: Path) -> None:
     path.rmdir()
 
 
-def _load_header_map(snapshot_path: Path) -> dict:
-    data = json.loads((snapshot_path / "config/sets/shop/legacy-header-map.json").read_text(encoding="utf-8"))
-    return data["tables"]
-
-
-def _inspect(item: dict, header_map: dict, schema: dict | None) -> dict:
-    entry = {"item_id": item["id"], "name": item["filename"], "sha256": item["sha256"], "bytes": item["bytes"],
-             "read_error": None, "table": item["filename"][:-4]}
-    if item["read_status"] != "ok":
-        e = item["read_errors"][0]
-        where = f"{e['record']}번째 레코드: " if e.get("record") else ""
-        return entry | {"read_error": where + e["reason"], "headers": []}
-    table = entry["table"]
-    cmap = header_map.get(table, {}).get("columns", {})
-    known = bool(schema) and table in schema["tables"]
-    logical_names = {f["name"] for f in schema["tables"][table]["fields"]} if known else set()
-    headers = []
-    for h in item["headers"]:
-        if h in cmap:
-            headers.append({"original": h, "logical": cmap[h], "basis": "legacy_map"})
-        elif h in logical_names:
-            headers.append({"original": h, "logical": h, "basis": "exact"})
-        else:
-            headers.append({"original": h, "logical": None, "basis": None})
-    return entry | {"known_table": known, "rows": item["rows"], "columns": len(item["headers"]), "headers": headers}
+def _mapping_of(proposal: dict) -> dict:
+    return {"table": proposal["table"]["table"],
+            "columns": {c["original"]: c["logical"] for c in proposal["columns"]}}
 
 
 def _write_view(data: bytes, entry: dict, target: Path) -> None:
-    rows = list(csv.reader(io.StringIO(data.decode("utf-8-sig"), newline=""), strict=True))
-    rows[0] = [h["logical"] or h["original"] for h in entry["headers"]]
+    """표준화 뷰(간이): 매핑된 컬럼만 논리 이름으로. 추가 컬럼은 뷰에 넣지 않는다(TD 5-3)."""
+    rows = list(csv.reader(io.StringIO(data.decode(entry["read_options"]["encoding"]), newline=""),
+                           delimiter=entry["read_options"]["delimiter"], strict=True))
+    cols = entry["mapping"]["columns"]
+    keep = [i for i, h in enumerate(rows[0]) if cols.get(h)]
+    out = [[cols[rows[0][i]] for i in keep]] + [[r[i] for i in keep] for r in rows[1:]]
     buf = io.StringIO()
-    csv.writer(buf, lineterminator="\n").writerows(rows)
+    csv.writer(buf, lineterminator="\n").writerows(out)
     target.write_text(buf.getvalue(), encoding="utf-8")
 
 

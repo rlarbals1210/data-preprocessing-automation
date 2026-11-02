@@ -62,3 +62,20 @@ export const SET_LABEL: Record<string, string> = { shop: '쇼핑몰 표준', non
 export const fmt = (n: number | undefined | null) => (n ?? 0).toLocaleString('ko-KR');
 export const when = (iso: string) =>
   new Date(iso).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' });
+
+export const GRADE: Record<string, { label: string; color: string }> = {
+  exact: { label: '정확 일치', color: 'blue' },
+  alias: { label: '별칭', color: 'teal' },
+  similar: { label: '유사 이름', color: 'orange' },
+  shape: { label: '값 모양', color: 'orange' },
+  none: { label: '후보 없음', color: 'gray' },
+};
+
+export const REASON: Record<string, string> = {
+  one_to_one: '일대일 위반',
+  normalization_collision: '정규화 충돌',
+  similar_tie: '후보 동률',
+  shape_tie: '후보 동률',
+};
+
+export const TABLE_BASIS: Record<string, string> = { name: '이름 일치', headers: '헤더 비율', user: '직접 선택' };

@@ -24,10 +24,20 @@ def upload(client, names, set_name="shop", source="판매팀"):
     return r.json()
 
 
+def confirm(client, run, edit=None):
+    files = [{"item_id": f["item_id"], **f["mapping"]} for f in run["files"] if not f["read_error"]]
+    if edit:
+        edit(files)
+    return client.put(f"/api/runs/{run['id']}/mapping", json={"files": files})
+
+
 def test_full_flow_all_tables(client):
     run = upload(client, sorted(p.name for p in DEV.glob("*.csv")))
     assert run["status"] == "uploaded" and run["rows"] == 6409
-    assert all(h["logical"] for f in run["files"] for h in f["headers"])
+    assert all(v for f in run["files"] for v in f["mapping"]["columns"].values())
+    assert all(not f["proposal"]["needs_confirmation"] and not f["confirmed"] for f in run["files"])
+    assert client.post(f"/api/runs/{run['id']}/diagnose").json()["code"] == "mapping_unconfirmed"  # AC-03-3
+    assert confirm(client, run).status_code == 200
     d = client.post(f"/api/runs/{run['id']}/diagnose").json()
     assert d["engine_status"] == "completed" and d["rules"]["not_executed"] == 0
     assert d["category_counts"]["standardization_candidate"] == 4424
@@ -46,6 +56,7 @@ def test_full_flow_all_tables(client):
 
 def test_partial_upload_skips_dependent_rules(client):
     run = upload(client, ["orders.csv"])
+    confirm(client, run)
     d = client.post(f"/api/runs/{run['id']}/diagnose").json()
     assert d["engine_status"] == "completed"
     reasons = {(s["rule"], s["reason"]) for s in d["skipped_rules"]}
@@ -79,7 +90,62 @@ def test_same_name_files_kept_separately(client):
                     data={"set": "shop", "source": "s"})
     run = r.json()
     assert len({f["item_id"] for f in run["files"]}) == 2
-    assert client.post(f"/api/runs/{run['id']}/diagnose").json()["code"] == "duplicate_table"
+    bad = confirm(client, run)
+    assert bad.status_code == 400 and "같은 표준 테이블" in bad.json()["message"]
+
+    def drop_second(files):
+        files[1]["table"] = None  # 두 번째 파일은 실행 대상에서 제외
+    assert confirm(client, run, drop_second).status_code == 200
+    assert client.post(f"/api/runs/{run['id']}/diagnose").status_code == 200
+
+
+def test_mapping_edit_keeps_auto_proposal_and_invalidates(client):
+    """AC-03-2 자동 제안·최종 결과 따로 저장, AC-03-5 매핑 변경 시 이전 진단 무효."""
+    run = upload(client, ["orders.csv", "customers.csv"])
+    confirm(client, run)
+    client.post(f"/api/runs/{run['id']}/diagnose")
+
+    def drop_ordered_at(files):
+        orders = next(f for f in files if f["table"] == "orders")
+        orders["columns"]["주문일시"] = None
+    after = confirm(client, run, drop_ordered_at).json()
+    orders = next(f for f in after["files"] if f["name"] == "orders.csv")
+    assert orders["mapping"]["columns"]["주문일시"] is None
+    assert next(c for c in orders["proposal"]["columns"] if c["original"] == "주문일시")["logical"] == "ordered_at"
+    assert after["status"] == "uploaded"
+    assert client.get(f"/api/runs/{run['id']}/diagnosis").status_code == 409
+    d = client.post(f"/api/runs/{run['id']}/diagnose").json()
+    assert {"table": "orders", "rule": "column", "columns": ["ordered_at"], "reason": "missing_column"} in d[
+        "skipped_rules"]
+
+
+def test_mapping_violations_rejected(client):
+    run = upload(client, ["orders.csv"])
+
+    def dup(files):
+        files[0]["columns"]["고객번호"] = "order_id"
+    r = confirm(client, run, dup)
+    assert r.status_code == 400 and "같은 표준 컬럼" in r.json()["message"]
+
+    def unknown(files):
+        files[0]["columns"]["고객번호"] = "nope"
+    assert confirm(client, run, unknown).status_code == 400
+    assert client.put(f"/api/runs/{run['id']}/mapping", json={"files": []}).status_code == 400
+    assert client.put(f"/api/runs/{run['id']}/mapping", json={"files": "x"}).status_code == 400
+
+
+def test_propose_other_table(client):
+    run = upload(client, ["returns.csv"])
+    item = run["files"][0]["item_id"]
+    p = client.post(f"/api/runs/{run['id']}/propose", json={"item_id": item, "table": "refunds"}).json()
+    assert p["table"]["basis"] == "user" and p["needs_confirmation"]
+    assert client.post(f"/api/runs/{run['id']}/propose", json={"item_id": item, "table": "nope"}).status_code == 400
+
+
+def test_catalog_in_run_view(client):
+    run = upload(client, ["orders.csv"])
+    v = client.get(f"/api/runs/{run['id']}").json()
+    assert "order_id" in v["catalog"]["orders"]["columns"] and "ordered_at" in v["catalog"]["orders"]["required"]
 
 
 @pytest.mark.parametrize("name", ["../orders.csv", "folder/orders.csv", "../../x/orders.csv"])

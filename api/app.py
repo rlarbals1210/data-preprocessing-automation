@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import Body, FastAPI, File, Form, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -58,7 +58,18 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
 
     @app.get("/api/runs/{run_id}")
     def run(run_id: str):
-        return ws.load(run_id)
+        return ws.view(run_id)
+
+    @app.post("/api/runs/{run_id}/propose")
+    def propose(run_id: str, body: Annotated[dict, Body()]):
+        return ws.propose_table(run_id, int(body.get("item_id", 0)), str(body.get("table", "")))
+
+    @app.put("/api/runs/{run_id}/mapping")
+    def confirm_mapping(run_id: str, body: Annotated[dict, Body()]):
+        files = body.get("files")
+        if not isinstance(files, list) or not all(isinstance(x, dict) for x in files):
+            raise FlowError("bad_mapping", "files 목록이 필요하다")
+        return ws.confirm_mapping(run_id, files)
 
     @app.post("/api/runs/{run_id}/diagnose")
     def diagnose(run_id: str):

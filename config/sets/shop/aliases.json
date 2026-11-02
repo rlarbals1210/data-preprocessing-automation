@@ -1,0 +1,709 @@
+{
+  "version": 1,
+  "bases": {
+    "dev_korean_header": "개발용 오염 입력의 한글 헤더(legacy-header-map.json, 순서·설명 대조로 작성·검토)"
+  },
+  "tables": {
+    "customers": {
+      "aliases": [],
+      "columns": {
+        "customer_id": [
+          {
+            "alias": "고객번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "customer_name": [
+          {
+            "alias": "고객명",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "email": [
+          {
+            "alias": "이메일",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "phone": [
+          {
+            "alias": "휴대폰",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "customer_status": [
+          {
+            "alias": "회원상태",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "marketing_consent": [
+          {
+            "alias": "마케팅동의",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "joined_at": [
+          {
+            "alias": "가입일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "updated_at": [
+          {
+            "alias": "수정일시",
+            "basis": "dev_korean_header"
+          }
+        ]
+      }
+    },
+    "customer_addresses": {
+      "aliases": [],
+      "columns": {
+        "address_id": [
+          {
+            "alias": "주소번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "customer_id": [
+          {
+            "alias": "고객번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "address_label": [
+          {
+            "alias": "배송지별칭",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "recipient_name": [
+          {
+            "alias": "받는분",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "recipient_phone": [
+          {
+            "alias": "수령인연락처",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "postal_code": [
+          {
+            "alias": "우편번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "address_line1": [
+          {
+            "alias": "기본주소",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "address_line2": [
+          {
+            "alias": "상세주소",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "is_default": [
+          {
+            "alias": "기본배송지",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "created_at": [
+          {
+            "alias": "등록일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "updated_at": [
+          {
+            "alias": "수정일시",
+            "basis": "dev_korean_header"
+          }
+        ]
+      }
+    },
+    "categories": {
+      "aliases": [],
+      "columns": {
+        "category_id": [
+          {
+            "alias": "분류번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "parent_category_id": [
+          {
+            "alias": "상위분류번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "category_name": [
+          {
+            "alias": "분류명",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "is_active": [
+          {
+            "alias": "사용여부",
+            "basis": "dev_korean_header"
+          }
+        ]
+      }
+    },
+    "products": {
+      "aliases": [],
+      "columns": {
+        "product_id": [
+          {
+            "alias": "상품번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "category_id": [
+          {
+            "alias": "분류번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "product_name": [
+          {
+            "alias": "상품명",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "brand_name": [
+          {
+            "alias": "브랜드",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "description": [
+          {
+            "alias": "상품설명",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "product_status": [
+          {
+            "alias": "상품상태",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "created_at": [
+          {
+            "alias": "등록일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "updated_at": [
+          {
+            "alias": "수정일시",
+            "basis": "dev_korean_header"
+          }
+        ]
+      }
+    },
+    "product_variants": {
+      "aliases": [],
+      "columns": {
+        "sku_id": [
+          {
+            "alias": "옵션코드",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "product_id": [
+          {
+            "alias": "상품번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "option_name": [
+          {
+            "alias": "옵션명",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "barcode": [
+          {
+            "alias": "바코드",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "current_price": [
+          {
+            "alias": "판매가",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "weight_g": [
+          {
+            "alias": "무게_g",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "variant_status": [
+          {
+            "alias": "판매상태",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "created_at": [
+          {
+            "alias": "등록일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "updated_at": [
+          {
+            "alias": "수정일시",
+            "basis": "dev_korean_header"
+          }
+        ]
+      }
+    },
+    "orders": {
+      "aliases": [],
+      "columns": {
+        "order_id": [
+          {
+            "alias": "주문번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "customer_id": [
+          {
+            "alias": "고객번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "ordered_at": [
+          {
+            "alias": "주문일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "order_channel": [
+          {
+            "alias": "주문경로",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "order_status": [
+          {
+            "alias": "주문상태",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "recipient_name": [
+          {
+            "alias": "받는분",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "recipient_phone": [
+          {
+            "alias": "수령인연락처",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "postal_code": [
+          {
+            "alias": "우편번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "address_line1": [
+          {
+            "alias": "기본주소",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "address_line2": [
+          {
+            "alias": "상세주소",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "delivery_memo": [
+          {
+            "alias": "배송요청",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "shipping_fee": [
+          {
+            "alias": "배송비",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "order_total": [
+          {
+            "alias": "주문총액",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "cancelled_at": [
+          {
+            "alias": "취소일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "updated_at": [
+          {
+            "alias": "수정일시",
+            "basis": "dev_korean_header"
+          }
+        ]
+      }
+    },
+    "order_items": {
+      "aliases": [],
+      "columns": {
+        "order_item_id": [
+          {
+            "alias": "주문상세번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "order_id": [
+          {
+            "alias": "주문번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "sku_id": [
+          {
+            "alias": "옵션코드",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "product_name_snapshot": [
+          {
+            "alias": "주문상품명",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "option_name_snapshot": [
+          {
+            "alias": "주문옵션명",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "quantity": [
+          {
+            "alias": "수량",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "unit_price": [
+          {
+            "alias": "단가",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "discount_amount": [
+          {
+            "alias": "할인액",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "line_total": [
+          {
+            "alias": "항목금액",
+            "basis": "dev_korean_header"
+          }
+        ]
+      }
+    },
+    "payments": {
+      "aliases": [],
+      "columns": {
+        "payment_id": [
+          {
+            "alias": "결제번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "order_id": [
+          {
+            "alias": "주문번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "payment_method": [
+          {
+            "alias": "결제수단",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "payment_status": [
+          {
+            "alias": "결제상태",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "amount": [
+          {
+            "alias": "금액",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "requested_at": [
+          {
+            "alias": "요청일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "paid_at": [
+          {
+            "alias": "결제일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "failure_code": [
+          {
+            "alias": "실패코드",
+            "basis": "dev_korean_header"
+          }
+        ]
+      }
+    },
+    "shipments": {
+      "aliases": [],
+      "columns": {
+        "shipment_id": [
+          {
+            "alias": "출고번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "order_id": [
+          {
+            "alias": "주문번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "carrier_code": [
+          {
+            "alias": "택배사",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "tracking_number": [
+          {
+            "alias": "송장번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "shipment_status": [
+          {
+            "alias": "배송상태",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "created_at": [
+          {
+            "alias": "등록일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "shipped_at": [
+          {
+            "alias": "출고일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "delivered_at": [
+          {
+            "alias": "배송완료일시",
+            "basis": "dev_korean_header"
+          }
+        ]
+      }
+    },
+    "shipment_items": {
+      "aliases": [],
+      "columns": {
+        "shipment_item_id": [
+          {
+            "alias": "출고상세번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "shipment_id": [
+          {
+            "alias": "출고번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "order_item_id": [
+          {
+            "alias": "주문상세번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "quantity": [
+          {
+            "alias": "수량",
+            "basis": "dev_korean_header"
+          }
+        ]
+      }
+    },
+    "returns": {
+      "aliases": [],
+      "columns": {
+        "return_id": [
+          {
+            "alias": "반품번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "order_id": [
+          {
+            "alias": "주문번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "return_status": [
+          {
+            "alias": "반품상태",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "requested_at": [
+          {
+            "alias": "요청일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "received_at": [
+          {
+            "alias": "입고일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "closed_at": [
+          {
+            "alias": "종료일시",
+            "basis": "dev_korean_header"
+          }
+        ]
+      }
+    },
+    "return_items": {
+      "aliases": [],
+      "columns": {
+        "return_item_id": [
+          {
+            "alias": "반품상세번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "return_id": [
+          {
+            "alias": "반품번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "shipment_item_id": [
+          {
+            "alias": "출고상세번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "quantity": [
+          {
+            "alias": "수량",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "reason_code": [
+          {
+            "alias": "반품사유코드",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "reason_detail": [
+          {
+            "alias": "상세사유",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "item_condition": [
+          {
+            "alias": "물품상태",
+            "basis": "dev_korean_header"
+          }
+        ]
+      }
+    },
+    "refunds": {
+      "aliases": [],
+      "columns": {
+        "refund_id": [
+          {
+            "alias": "환불번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "payment_id": [
+          {
+            "alias": "결제번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "return_id": [
+          {
+            "alias": "반품번호",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "refund_type": [
+          {
+            "alias": "환불유형",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "refund_status": [
+          {
+            "alias": "환불상태",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "amount": [
+          {
+            "alias": "금액",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "requested_at": [
+          {
+            "alias": "요청일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "refunded_at": [
+          {
+            "alias": "환불일시",
+            "basis": "dev_korean_header"
+          }
+        ],
+        "failure_code": [
+          {
+            "alias": "실패코드",
+            "basis": "dev_korean_header"
+          }
+        ]
+      }
+    }
+  }
+}

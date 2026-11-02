@@ -1,16 +1,33 @@
-export type Header = { original: string; logical: string | null; basis: 'legacy_map' | 'exact' | null };
+export type Grade = 'exact' | 'alias' | 'similar' | 'shape' | 'none';
+export type ColumnProposal = {
+  original: string;
+  logical: string | null;
+  grade: Grade;
+  candidates: { logical: string; grade: Grade; score: number | null }[];
+  reasons: string[];
+  needs_confirmation: boolean;
+};
+export type Proposal = {
+  table: { table: string | null; auto: boolean; basis: 'name' | 'headers' | 'user' | null; scores: Record<string, number> };
+  columns: ColumnProposal[];
+  missing_required: string[];
+  extra: string[];
+  needs_confirmation: boolean;
+};
+export type Mapping = { table: string | null; columns: Record<string, string | null> };
 export type FileEntry = {
   item_id: number;
   name: string;
-  table: string;
-  known_table?: boolean;
-  rows?: number;
-  columns?: number;
-  bytes: number;
   sha256: string;
+  bytes: number;
+  rows: number;
+  headers: string[];
   read_error: string | null;
-  headers: Header[];
+  proposal: Proposal | null;
+  mapping: Mapping;
+  confirmed: boolean;
 };
+export type Catalog = Record<string, { columns: string[]; required: string[] }>;
 export type RunStatus = 'uploaded' | 'diagnosed' | 'executed' | 'failed';
 export type ResultSummary = {
   status: 'completed' | 'completed_with_issues' | 'failed';
@@ -29,6 +46,7 @@ export type Run = {
   snapshot: string | null;
   files: FileEntry[];
   rows: number;
+  catalog?: Catalog | null;
   plan: { skipped_rules: SkippedRule[] } | null;
   result: ResultSummary | null;
 };
@@ -101,6 +119,18 @@ export const api = {
     return req<Run>('/runs', { method: 'POST', body: form });
   },
   run: (id: string) => req<Run>(`/runs/${id}`),
+  propose: (id: string, item_id: number, table: string) =>
+    req<Proposal>(`/runs/${id}/propose`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id, table }),
+    }),
+  confirmMapping: (id: string, files: ({ item_id: number } & Mapping)[]) =>
+    req<Run>(`/runs/${id}/mapping`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ files }),
+    }),
   diagnose: (id: string) => req<Diagnosis>(`/runs/${id}/diagnose`, { method: 'POST' }),
   diagnosis: (id: string) => req<Diagnosis>(`/runs/${id}/diagnosis`),
   issues: (id: string, p: { category?: string; table?: string | null; offset: number; limit: number }) =>
