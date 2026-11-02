@@ -23,7 +23,14 @@ def duplicate_keys(report):
             for g in report['duplicate_groups']}
 
 
-def clean(input_path, config, output, encoding='utf-8-sig', delimiter=','):
+def clean(input_path, config, output, encoding='utf-8-sig', delimiter=',', allow=None, extra_blocked=None):
+    """정제. 엔진 확장 ③(docs/technical-design.md 8-4):
+    - allow=None: 보류되지 않은 후보 전부 적용(기존 명령줄 동작). allow=set(): 0셀 변경.
+      allow는 (테이블, 레코드, 컬럼) 집합이며 현재 후보 − 보류의 부분집합이어야 한다(아니면 오류).
+      allow에 없는 후보는 적용하지 않고 not_approved로 기록한다(정제 후에도 후보로 남을 뿐 문제가 아니다).
+    - extra_blocked: 서비스가 더 보류할 셀(정합성 보류 등). 기존 보류에 합친다.
+    두 인자를 생략하면 결과·반환값이 기존과 같다(T-01).
+    """
     source, output = Path(input_path).resolve(), Path(output).resolve()
     source_dir = source if source.is_dir() else source.parent
     if output == source_dir or source_dir in output.parents:
@@ -42,6 +49,12 @@ def clean(input_path, config, output, encoding='utf-8-sig', delimiter=','):
     blocked = {(i['table'], i['record'], c) for i in before['issues']
                if i['category'] in {'business_rule_violation', 'human_review'}
                and i['code'] != 'duplicate_row' for c in i['columns']}
+    extended = allow is not None or extra_blocked is not None
+    if extra_blocked is not None:
+        extra = {tuple(k) for k in extra_blocked}
+        if any(len(k) != 3 for k in extra):
+            raise ValueError('extra_blocked keys must be (table, record, column)')
+        blocked |= extra
     candidates, held = {}, []
     for item in before['issues']:
         if item['category'] != 'standardization_candidate':
@@ -62,6 +75,16 @@ def clean(input_path, config, output, encoding='utf-8-sig', delimiter=','):
             candidates[key] = dict(item, codes=[item['code']])
         elif item['code'] not in candidates[key]['codes']:
             candidates[key]['codes'].append(item['code'])
+    not_approved = []
+    if allow is not None:
+        allow = {tuple(k) for k in allow}
+        unknown = allow - set(candidates)
+        if unknown:
+            raise ValueError(f'Allowed cells are not current unheld candidates: {sorted(unknown)[:5]}')
+        for key in sorted(set(candidates) - allow):
+            item = candidates.pop(key)
+            not_approved.append({'table': key[0], 'record': key[1], 'column': key[2],
+                                 'suggested_value': item['suggested_value'], 'codes': item['codes']})
     changes = []
     for (name, record, col), item in sorted(candidates.items()):
         row = tables[name]['rows'][record-1]
@@ -85,7 +108,13 @@ def clean(input_path, config, output, encoding='utf-8-sig', delimiter=','):
                 'output_encoding': 'utf-8', 'output_delimiter': ',',
                 'null_representation': 'empty CSV field; logical null recorded in changes.json',
                 'proposed_changed_cells': len(changes), 'held_candidate_events': len(held)}
+    if extended:
+        manifest.update(selection='allow' if allow is not None else 'all',
+                        not_approved_cells=len(not_approved),
+                        extra_blocked_cells=len(extra_blocked or []))
     dump(output/'manifest.json', manifest)
+    if extended:
+        dump(output/'not-approved.json', not_approved)
     dump(output/'before.json', before)
     dump(output/'held.json', held)
     try:

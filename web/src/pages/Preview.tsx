@@ -11,41 +11,61 @@ export default function Preview({ run }: { run: Run }) {
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
   const nav = useNavigate();
+  const select = useMutation({
+    mutationFn: (ids: string[]) => api.select(run.id, ids),
+    onSuccess: (data) => qc.setQueryData(['preview', run.id], data),
+  });
   const execute = useMutation({
     mutationFn: () => api.execute(run.id),
     onSuccess: () => {
       setOpen(false);
-      qc.invalidateQueries({ queryKey: ['run', run.id] });
-      qc.invalidateQueries({ queryKey: ['result', run.id] });
-      qc.invalidateQueries({ queryKey: ['changes', run.id] });
+      ['run', 'result', 'changes'].forEach((k) => qc.invalidateQueries({ queryKey: [k, run.id] }));
       qc.invalidateQueries({ queryKey: ['runs'] });
       nav(`/runs/${run.id}/result`);
     },
   });
   if (p.isLoading) return <Loader />;
   if (p.error || !p.data) return <Alert color="red">{(p.error as Error)?.message}</Alert>;
+  const x = p.data;
+  const selectable = x.groups.filter((g) => g.cells > 0);
+  const approved = selectable.filter((g) => g.approved).map((g) => g.id);
+  const toggle = (id: string, on: boolean) =>
+    select.mutate(on ? [...approved, id] : approved.filter((a) => a !== id));
+  const allOn = approved.length === selectable.length;
 
   return (
     <Stack>
       <Group justify="space-between">
         <Group gap="lg">
           <Text>
-            규칙 묶음 <b>{p.data.groups.length}</b>
+            규칙 묶음 <b>{approved.length}</b> / {selectable.length}
           </Text>
           <Text>
-            변경 셀 <b>{fmt(p.data.total_cells)}</b>
+            변경 셀 <b>{fmt(x.total_cells)}</b> / {fmt(x.candidates)}
           </Text>
+          {x.held > 0 && (
+            <Text c="orange.7">
+              보류 <b>{fmt(x.held)}</b>
+            </Text>
+          )}
+          {select.isPending && <Loader size="xs" />}
         </Group>
-        <Button leftSection={<IconCheck size={16} />} disabled={!p.data.total_cells} onClick={() => setOpen(true)}>
+        <Button leftSection={<IconCheck size={16} />} disabled={!x.total_cells || select.isPending} onClick={() => setOpen(true)}>
           최종 확인
         </Button>
       </Group>
+      {select.error && <Alert color="red">{(select.error as Error).message}</Alert>}
       <Card withBorder p={0}>
         <Table verticalSpacing="sm" highlightOnHover>
           <Table.Thead>
             <Table.Tr>
               <Table.Th w={40}>
-                <Checkbox checked readOnly aria-label="전체" />
+                <Checkbox
+                  checked={allOn}
+                  indeterminate={!allOn && approved.length > 0}
+                  onChange={() => select.mutate(allOn ? [] : selectable.map((g) => g.id))}
+                  aria-label="전체"
+                />
               </Table.Th>
               <Table.Th>테이블</Table.Th>
               <Table.Th>컬럼</Table.Th>
@@ -55,17 +75,25 @@ export default function Preview({ run }: { run: Run }) {
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {p.data.groups.map((g) => (
-              <Table.Tr key={`${g.table}.${g.column}.${g.code}`}>
+            {x.groups.map((g) => (
+              <Table.Tr key={g.id} style={{ opacity: g.approved || !g.cells ? 1 : 0.5 }}>
                 <Table.Td>
-                  <Checkbox checked readOnly />
+                  <Checkbox checked={g.approved} disabled={!g.cells} onChange={(e) => toggle(g.id, e.currentTarget.checked)} />
                 </Table.Td>
                 <Table.Td ff="monospace">{g.table}</Table.Td>
                 <Table.Td ff="monospace">{g.column}</Table.Td>
                 <Table.Td>
-                  <Badge variant="light" tt="none">{CHANGE[g.code] ?? CODE[g.code] ?? g.code}</Badge>
+                  <Badge variant="light">{CHANGE[g.code] ?? CODE[g.code] ?? g.code}</Badge>
                 </Table.Td>
-                <Table.Td ta="right">{fmt(g.cells)}</Table.Td>
+                <Table.Td ta="right">
+                  {fmt(g.cells)}
+                  {g.held > 0 && (
+                    <Text span c="orange.7" fz="xs">
+                      {' '}
+                      +보류 {fmt(g.held)}
+                    </Text>
+                  )}
+                </Table.Td>
                 <Table.Td>
                   <Stack gap={2}>
                     {g.examples.map((e, i) => (
@@ -86,10 +114,10 @@ export default function Preview({ run }: { run: Run }) {
         <Stack>
           <Group gap="lg">
             <Text>
-              규칙 묶음 <b>{p.data.groups.length}</b>
+              규칙 묶음 <b>{approved.length}</b>
             </Text>
             <Text>
-              변경 셀 <b>{fmt(p.data.total_cells)}</b>
+              변경 셀 <b>{fmt(x.total_cells)}</b>
             </Text>
           </Group>
           {execute.error && <Alert color="red">{(execute.error as Error).message}</Alert>}

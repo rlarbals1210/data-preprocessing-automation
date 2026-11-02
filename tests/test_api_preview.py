@@ -41,7 +41,7 @@ def test_full_flow_all_tables(client):
     assert d["engine_status"] == "completed" and d["rules"]["not_executed"] == 0
     assert d["category_counts"]["standardization_candidate"] == 4424
     p = client.get(f"/api/runs/{run['id']}/preview").json()
-    assert p["total_cells"] == 4424 and p["groups"][0]["examples"]
+    assert p["total_cells"] == 4424 and p["groups"][0]["examples"] and all(g["approved"] for g in p["groups"])
     res = client.post(f"/api/runs/{run['id']}/execute").json()
     assert res["changed_cells"] == 4424 and res["rows"] == 6409
     full = client.get(f"/api/runs/{run['id']}/result").json()
@@ -197,3 +197,33 @@ def test_extra_columns_not_in_outputs_and_not_duplicates(client):
     client.post(f"/api/runs/{run['id']}/execute")
     body = client.get(f"/api/runs/{run['id']}/files/categories.csv").text
     assert "__extras_digest__" not in body and body.startswith("category_id,")
+
+
+def test_selection_controls_execution(client):
+    """T-08·AC-06-5: 선택한 묶음만 적용, 미리보기 건수 = 실행 건수, 잘못된 선택 거부, 재진단 시 선택 무효."""
+    run = upload(client, ["orders.csv"])
+    confirm(client, run)
+    client.post(f"/api/runs/{run['id']}/diagnose")
+    groups = client.get(f"/api/runs/{run['id']}/preview").json()["groups"]
+    keep = [g["id"] for g in groups if g["column"] == "order_total"]
+    p = client.put(f"/api/runs/{run['id']}/selection", json={"approved_groups": keep}).json()
+    assert p["total_cells"] == sum(g["cells"] for g in groups if g["id"] in keep)
+    assert [g["id"] for g in p["groups"] if g["approved"]] == keep
+    bad = client.put(f"/api/runs/{run['id']}/selection", json={"approved_groups": ["orders.nope.type"]})
+    assert bad.status_code == 400 and bad.json()["code"] == "bad_selection"
+    stale = client.put(f"/api/runs/{run['id']}/selection", json={"view_hash": "x" * 64})
+    assert stale.status_code == 400
+    res = client.post(f"/api/runs/{run['id']}/execute").json()
+    assert res["changed_cells"] == p["total_cells"] and res["not_approved"] == p["candidates"] - p["total_cells"]
+    changes = client.get(f"/api/runs/{run['id']}/changes", params={"limit": 500}).json()["items"]
+    assert {c["column"] for c in changes} == {"order_total"}
+    client.post(f"/api/runs/{run['id']}/diagnose")  # 다시 진단하면 선택이 초기화된다
+    assert all(g["approved"] for g in client.get(f"/api/runs/{run['id']}/preview").json()["groups"])
+
+
+def test_empty_selection_changes_nothing(client):
+    run = upload(client, ["categories.csv"])
+    confirm(client, run)
+    client.post(f"/api/runs/{run['id']}/diagnose")
+    assert client.put(f"/api/runs/{run['id']}/selection", json={"approved_groups": []}).json()["total_cells"] == 0
+    assert client.post(f"/api/runs/{run['id']}/execute").json()["changed_cells"] == 0

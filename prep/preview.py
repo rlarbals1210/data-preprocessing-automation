@@ -18,6 +18,9 @@ from pathlib import Path
 
 from diagnostics.cleaning import clean
 from diagnostics.engine import diagnose, read_table
+from prep.apply import ApplyError, build_apply_plan, verify_plan
+from prep.apply import candidates as apply_candidates
+from prep.apply import groups as apply_groups
 from prep.guard import Guard
 from prep.mapping import Catalog, propose, validate_final
 from prep.plan import build_plan
@@ -186,7 +189,7 @@ class Workspace:
             f.update(mapping=new, confirmed=True)
         if changed and run["status"] != "uploaded":  # AC-03-5: 매핑이 바뀌면 이전 진단·결과 무효
             base = self.run_dir(run_id)
-            for name in ("report.json", "engine-config.json"):
+            for name in ("report.json", "engine-config.json", "apply-plan.json"):
                 (base / name).unlink(missing_ok=True)
             for sub in ("result", "view"):
                 if (base / sub).exists():
@@ -237,6 +240,7 @@ class Workspace:
             present = {f["mapping"]["table"]: {v for v in f["mapping"]["columns"].values() if v} for f in readable}
             plan = build_plan(logical, present)  # M1-6
             config = plan["config"]
+        (base / "apply-plan.json").unlink(missing_ok=True)  # 새 진단 → 이전 선택 무효
         report = Locator(built.lineage).translate_report(diagnose(view, config))
         (base / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
         run.update(status="diagnosed", result=None, view_hash=built.hash,
@@ -294,35 +298,53 @@ class Workspace:
             out.append(item)
         return {"total": len(items), "items": out}
 
+    def _plan(self, run_id: str) -> dict:
+        """저장된 적용 계획(없으면 전체 승인 기본값). M1-9."""
+        run, report = self.load(run_id), self._report(run_id)
+        path = self.run_dir(run_id) / "apply-plan.json"
+        if path.is_file():
+            return json.loads(path.read_text(encoding="utf-8"))
+        return build_apply_plan(report, run["view_hash"])
+
     def changes_preview(self, run_id: str) -> dict:
         report = self._report(run_id)
-        groups: dict[tuple, dict] = {}
-        for i in report["issues"]:
-            if i["category"] != "standardization_candidate":
-                continue
-            key = (i["table"], i["columns"][0], i["code"])
-            g = groups.setdefault(key, {"table": key[0], "column": key[1], "code": key[2], "cells": set(),
-                                        "examples": []})
-            g["cells"].add(i["record"])
-            before = i["values"][key[1]]
-            after = "" if i.get("suggested_value") is None else i["suggested_value"]
-            if len(g["examples"]) < 3 and all(e["before"] != before for e in g["examples"]):
-                g["examples"].append({"before": before, "after": after})
-        out = [g | {"cells": len(g["cells"])} for g in groups.values()]
-        out.sort(key=lambda g: (-g["cells"], g["table"], g["column"]))
-        return {"groups": out, "total_cells": sum(g["cells"] for g in out)}
+        cells, held = apply_candidates(report)
+        plan = self._plan(run_id)
+        approved = set(plan["approved_groups"])
+        out = [g | {"approved": g["id"] in approved} for g in apply_groups(cells, held)]
+        return {"groups": out, "total_cells": plan["counts"]["allowed"], "candidates": plan["counts"]["candidates"],
+                "held": plan["counts"]["held"], "plan_hash": plan["hash"], "view_hash": plan["view_hash"]}
+
+    def select(self, run_id: str, selection: dict) -> dict:
+        """사용자 선택 → 서버가 검증한 적용 계획(T-08)."""
+        run, report = self.load(run_id), self._report(run_id)
+        try:
+            plan = build_apply_plan(report, run["view_hash"], selection)
+        except (ApplyError, TypeError, ValueError) as exc:
+            raise FlowError("bad_selection", str(exc)) from exc
+        path = self.guard.safe_join(self.run_dir(run_id), "apply-plan.json")
+        path.write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
+        return self.changes_preview(run_id)
 
     # ---- 실행 ----
     def execute(self, run_id: str) -> dict:
         run = self.load(run_id)
         base = self.run_dir(run_id)
-        self._report(run_id)
+        report = self._report(run_id)
+        plan = self._plan(run_id)
+        try:
+            verify_plan(plan, report, run["view_hash"])  # 승인 때와 뷰·후보가 같은지
+        except ApplyError as exc:
+            raise FlowError("stale_plan", str(exc), 409) from exc
         config = json.loads((base / "engine-config.json").read_text(encoding="utf-8"))
         result = self.guard.safe_join(base, "result")
         if result.exists():
             _remove_tree(result)
         try:
-            out = clean(self.guard.safe_join(base, "view"), config, result)
+            out = clean(self.guard.safe_join(base, "view"), config, result,
+                        allow={tuple(k) for k in plan["allow"]})  # 엔진 확장 ③: 허용 셀만
+            if out["changed_cells"] != plan["counts"]["allowed"]:
+                raise ValueError("실행 변경 건수가 적용 계획과 다르다")  # AC-06-5
         except Exception as exc:  # 정제 실패는 실행 결과로 보여 준다
             run.update(status="failed", result={"status": "failed", "error": f"{type(exc).__name__}: {exc}"})
             self.save(run)
@@ -332,7 +354,8 @@ class Workspace:
             "human_review") else "completed"
         run.update(status="executed", result={"status": status, "changed_cells": out["changed_cells"],
                                               "rows": out["rows"], "before": out["before_categories"],
-                                              "after": remaining})
+                                              "after": remaining, "not_approved": out["not_approved_cells"],
+                                              "plan_hash": plan["hash"]})
         self.save(run)
         return run["result"]
 

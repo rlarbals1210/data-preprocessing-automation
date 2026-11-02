@@ -35,6 +35,7 @@ export type ResultSummary = {
   rows?: number;
   before?: Record<string, number>;
   after?: Record<string, number>;
+  not_approved?: number;
   error?: string;
 };
 export type Run = {
@@ -91,11 +92,22 @@ export type Issue = {
   detail?: string | null;
 };
 export type PreviewGroup = {
+  id: string;
+  approved: boolean;
+  held: number;
   table: string;
   column: string;
   code: string;
   cells: number;
   examples: { before: string; after: string }[];
+};
+export type PreviewData = {
+  groups: PreviewGroup[];
+  total_cells: number;
+  candidates: number;
+  held: number;
+  plan_hash: string;
+  view_hash: string;
 };
 export type Change = {
   table: string;
@@ -157,7 +169,13 @@ export const api = {
   diagnosis: (id: string) => req<Diagnosis>(`/runs/${id}/diagnosis`),
   issues: (id: string, p: { category?: string; table?: string | null; offset: number; limit: number }) =>
     req<Page<Issue>>(`/runs/${id}/issues${q(p)}`),
-  preview: (id: string) => req<{ groups: PreviewGroup[]; total_cells: number }>(`/runs/${id}/preview`),
+  preview: (id: string) => req<PreviewData>(`/runs/${id}/preview`),
+  select: (id: string, approved_groups: string[]) =>
+    req<PreviewData>(`/runs/${id}/selection`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approved_groups }),
+    }),
   execute: (id: string) => req<ResultSummary>(`/runs/${id}/execute`, { method: 'POST' }),
   result: (id: string) => req<ResultSummary & { files: { name: string; bytes: number }[] }>(`/runs/${id}/result`),
   changes: (id: string, offset: number, limit: number) => req<Page<Change>>(`/runs/${id}/changes${q({ offset, limit })}`),

@@ -38,6 +38,11 @@ export default function Result({ run }: { run: Run }) {
               <Text fz={26} fw={700} c="teal.7">
                 {fmt(x.changed_cells)}
               </Text>
+              {!!x.not_approved && (
+                <Text fz="xs" c="dimmed">
+                  승인 안 함 {fmt(x.not_approved)}
+                </Text>
+              )}
             </Card>
             <Card withBorder>
               <Text fz="xs" c="dimmed" fw={600}>

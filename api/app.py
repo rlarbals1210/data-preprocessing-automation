@@ -89,6 +89,10 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
     def preview(run_id: str):
         return ws.changes_preview(run_id)
 
+    @app.put("/api/runs/{run_id}/selection")
+    def select(run_id: str, body: Annotated[dict, Body()]):
+        return ws.select(run_id, body)
+
     @app.post("/api/runs/{run_id}/execute")
     def execute(run_id: str):
         return ws.execute(run_id)
