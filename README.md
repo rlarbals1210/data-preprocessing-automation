@@ -8,9 +8,12 @@ Python 3.12와 [uv](https://docs.astral.sh/uv/)를 쓴다. 프로젝트 폴더�
 
 ```sh
 uv sync                     # .venv 생성(Git 제외), uv.lock 기준
-uv run pytest tests         # 테스트 — 경로를 꼭 tests로 지정
-uv run ruff check .         # 린트
+make hooks                  # 처음 한 번: 커밋 전 경로 검사 훅 설치
+make check                  # 경로 검사 + 린트 + 테스트
+make test                   # = uv run pytest tests (경로를 꼭 tests로 지정)
 ```
+
+커밋 전 훅(`.githooks/pre-commit`)과 CI(`.github/workflows/ci.yml`)는 평가 자료·실행 데이터·생성 보고서·`matrices.json`·심볼릭 링크가 추적되지 않는지 파일 이름과 Git 모드만으로 검사한다(`tools/check_tracked_paths.py`). CI에는 평가 정답이 없다.
 
 `scripts/test_*.py`·`scripts/validate_dirty.py`는 평가 자료를 읽는 데이터셋 구축 검증 도구라 개발 중 실행하지 않는다([개발 계획](docs/development-plan.md) 3·8절).
 

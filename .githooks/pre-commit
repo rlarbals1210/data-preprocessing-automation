@@ -1,0 +1,3 @@
+#!/bin/sh
+# 평가 자료·실행 데이터·로컬 링크 커밋 차단 (docs/development-plan.md 7절). 설치: make hooks
+exec python3 "$(git rev-parse --show-toplevel)/tools/check_tracked_paths.py" --staged
