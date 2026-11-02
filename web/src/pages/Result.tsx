@@ -25,6 +25,16 @@ export default function Result({ run }: { run: Run }) {
         <Badge size="lg" variant="light" color={RESULT_STATUS[x.status]?.color}>
           {RESULT_STATUS[x.status]?.label}
         </Badge>
+        {x.attempt && (
+          <Badge size="lg" variant="outline" color="gray">
+            시도 {x.attempt}
+          </Badge>
+        )}
+        {x.audit?.passed && (
+          <Badge size="lg" variant="light" color="teal">
+            전체 셀 대조 통과 · {fmt(x.audit.checked_cells)}셀
+          </Badge>
+        )}
       </Group>
       {x.status === 'failed' ? (
         <Alert color="red">{x.error}</Alert>

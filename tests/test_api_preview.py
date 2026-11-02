@@ -304,3 +304,26 @@ def test_execute_requires_preview(client):
     client.post(f"/api/runs/{run['id']}/diagnose")
     r = client.post(f"/api/runs/{run['id']}/execute", json={"approval": {}})
     assert r.status_code == 409 and r.json()["code"] == "not_ready"
+
+
+def test_attempts_and_audit_via_api(client, tmp_path):
+    run, p = ready(client)
+    res = execute(client, run, p["approval"]).json()
+    assert res["attempt"] == 1 and res["audit"]["passed"]
+    assert res["audit"]["changed_cells"] == res["changed_cells"]
+    base = tmp_path / "workspace/runs" / run["id"]
+    assert (base / "attempt-1/engine/data/orders.csv").is_file() and (base / "attempt-1/audit.json").is_file()
+
+
+def test_engine_failure_recorded_as_failed_attempt(client, tmp_path, monkeypatch):
+    from prep import attempt as att
+
+    def boom(*args, **kwargs):
+        raise ValueError("엔진 실패 흉내")
+    run, p = ready(client)
+    monkeypatch.setattr(att, "run_engine", boom)
+    res = execute(client, run, p["approval"]).json()
+    assert res["status"] == "failed" and res["stage"] == "engine_failed" and "엔진 실패" in res["error"]
+    v = client.get(f"/api/runs/{run['id']}").json()
+    assert v["status"] == "failed"
+    assert client.get(f"/api/runs/{run['id']}/files/orders.csv").status_code == 404  # 결과 없음

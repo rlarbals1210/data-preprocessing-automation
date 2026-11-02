@@ -254,6 +254,42 @@ MIGRATIONS.append(
     """)
 
 
+MIGRATIONS.append(
+    # 3: M1-10b 정제 시도(완료 판정 아님 — 발행은 result_version, M1-10c)
+    f"""
+    CREATE TABLE attempt (
+        id INTEGER PRIMARY KEY,
+        run_id INTEGER NOT NULL REFERENCES run(id),
+        number INTEGER NOT NULL CHECK (number >= 1),
+        approval_id INTEGER NOT NULL REFERENCES approval(id),
+        path TEXT NOT NULL,
+        started_at TEXT NOT NULL DEFAULT {_NOW},
+        ended_at TEXT,
+        outcome TEXT CHECK (outcome IN ('engine_ok', 'engine_failed', 'audit_failed', 'publish_failed')),
+        error TEXT,
+        audit TEXT CHECK (audit IS NULL OR json_valid(audit)),
+        UNIQUE (run_id, number),
+        CHECK ((ended_at IS NULL) = (outcome IS NULL)));
+
+    CREATE TRIGGER attempt_no_delete BEFORE DELETE ON attempt
+    BEGIN SELECT RAISE(ABORT, 'append-only: attempt 행은 지울 수 없다'); END;
+
+    -- 시도: 끝맺음(ended_at·outcome·error·audit)은 한 번만 쓸 수 있다.
+    CREATE TRIGGER attempt_update_guard BEFORE UPDATE ON attempt
+    WHEN OLD.ended_at IS NOT NULL OR NEW.ended_at IS NULL
+      OR NEW.id IS NOT OLD.id OR NEW.run_id IS NOT OLD.run_id OR NEW.number IS NOT OLD.number
+      OR NEW.approval_id IS NOT OLD.approval_id OR NEW.path IS NOT OLD.path OR NEW.started_at IS NOT OLD.started_at
+    BEGIN SELECT RAISE(ABORT, 'append-only: 시도는 끝맺음만 한 번 기록할 수 있다'); END;
+
+    CREATE TRIGGER attempt_events AFTER UPDATE OF ended_at ON attempt
+    BEGIN
+        INSERT INTO event (subject_type, subject_id, kind, payload)
+        VALUES ('run', NEW.run_id, 'attempt_ended',
+                json_object('attempt', NEW.number, 'outcome', NEW.outcome, 'error', NEW.error));
+    END;
+    """)
+
+
 class StoreError(RuntimeError):
     pass
 

@@ -17,8 +17,8 @@ from collections import Counter, defaultdict
 from datetime import UTC, datetime
 from pathlib import Path
 
-from diagnostics.cleaning import clean
 from diagnostics.engine import diagnose, read_table
+from prep import attempt as attempts
 from prep.apply import ApplyError, build_apply_plan, verify_plan
 from prep.apply import candidates as apply_candidates
 from prep.apply import groups as apply_groups
@@ -224,9 +224,8 @@ class Workspace:
             base = self.run_dir(run_id)
             for name in ("report.json", "engine-config.json", "apply-plan.json"):
                 (base / name).unlink(missing_ok=True)
-            for sub in ("result", "view"):
-                if (base / sub).exists():
-                    _remove_tree(base / sub)
+            if (base / "view").exists():
+                _remove_tree(base / "view")
             run.update(plan=None, result=None)
             self._transition(run, "needs_confirmation", "mapping_changed")
         self._record_structure(run)  # 실행 대상·매핑 버전·구조 승인(이전 실행 승인은 무효화)
@@ -284,9 +283,6 @@ class Workspace:
         run.update(result=None, view_hash=built.hash,
                    plan=None if plan is None else {k: plan[k] for k in ("skipped", "tables", "completeness", "hash")})
         (base / "engine-config.json").write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
-        result = self.guard.safe_join(base, "result")
-        if result.exists():
-            _remove_tree(result)
         self.save(run)
         return self.diagnosis(run_id)
 
@@ -396,19 +392,26 @@ class Workspace:
         except (SnapshotError, ApplyError) as exc:
             raise FlowError("stale_plan", str(exc), 409) from exc
         config = json.loads((base / "engine-config.json").read_text(encoding="utf-8"))
-        result = self.guard.safe_join(base, "result")
-        if result.exists():
-            _remove_tree(result)
+        view = self.guard.safe_join(base, "view")
+        attempt = attempts.start(self.store, self.guard, run["db_run"], base, approval)  # M1-10b 새 시도 폴더
+        stage = "engine_failed"
         try:
-            out = clean(self.guard.safe_join(base, "view"), config, result,
-                        allow={tuple(k) for k in plan["allow"]})  # 엔진 확장 ③: 허용 셀만
+            out = attempts.run_engine(attempt, view, config, plan["allow"])  # 엔진 확장 ③: 허용 셀만
             if out["changed_cells"] != plan["counts"]["allowed"]:
                 raise ValueError("실행 변경 건수가 적용 계획과 다르다")  # AC-06-5
-        except Exception as exc:  # 정제 실패는 실행 결과로 보여 준다
-            run.update(result={"status": "failed", "error": f"{type(exc).__name__}: {exc}"})
-            self._transition(run, "failed", f"{type(exc).__name__}")
+            stage = "audit_failed"
+            for f in run["files"]:
+                if not f["read_error"]:
+                    self.blobs.get(f["sha256"])  # 보관 원본 해시 대조
+            audit = attempts.audit(attempt, view, self.guard, plan["allow"], run["view_hash"])  # AC-07-1
+        except Exception as exc:  # 정제·감사 실패는 실행 결과로 보여 준다(결과 미발행)
+            message = f"{type(exc).__name__}: {exc}"
+            attempts.finish(self.store, attempt, stage, message, getattr(exc, "audit", None))
+            run.update(result={"status": "failed", "error": message, "attempt": attempt.number, "stage": stage})
+            self._transition(run, "failed", stage)
             self.save(run)
             return run["result"]
+        attempts.finish(self.store, attempt, "engine_ok", None, audit)
         remaining = out["after_categories"]
         status = "completed_with_issues" if remaining.get("business_rule_violation") or remaining.get(
             "human_review") else "completed"
@@ -416,7 +419,8 @@ class Workspace:
         run.update(result={"status": status, "changed_cells": out["changed_cells"],
                                               "rows": out["rows"], "before": out["before_categories"],
                                               "after": remaining, "not_approved": out["not_approved_cells"],
-                                              "plan_hash": plan["hash"], "approval": approval})
+                                              "plan_hash": plan["hash"], "approval": approval,
+                                              "attempt": attempt.number, "audit": audit})
         self.save(run)
         return run["result"]
 
@@ -425,13 +429,19 @@ class Workspace:
         if not run["result"]:
             raise FlowError("not_executed", "아직 실행하지 않았다", 409)
         files = []
-        data = self.run_dir(run_id) / "result" / "data"
+        data = self._engine_dir(run) / "data"
         if data.is_dir():
             files = [{"name": p.name, "bytes": p.stat().st_size} for p in sorted(data.glob("*.csv"))]
         return run["result"] | {"files": files}
 
+    def _engine_dir(self, run: dict) -> Path:
+        n = (run.get("result") or {}).get("attempt")
+        if not n or run["result"]["status"] == "failed":
+            return self.run_dir(run["id"]) / "__no_result__"
+        return self.guard.safe_join(self.run_dir(run["id"]), f"attempt-{int(n)}", "engine")
+
     def changes(self, run_id: str, offset: int, limit: int) -> dict:
-        path = self.run_dir(run_id) / "result" / "changes.json"
+        path = self._engine_dir(self.load(run_id)) / "changes.json"
         if not path.is_file():
             raise FlowError("not_executed", "아직 실행하지 않았다", 409)
         items = json.loads(path.read_text(encoding="utf-8"))
@@ -447,11 +457,11 @@ class Workspace:
         return {"total": len(items), "items": out}
 
     def download(self, run_id: str, name: str) -> bytes:
-        base = self.run_dir(run_id)
+        base = self._engine_dir(self.load(run_id))
         if name == "changes.csv":
-            path = self.guard.safe_join(base, "result", "changes.csv")
+            path = base / "changes.csv"
         elif FILE_NAME.fullmatch(name):
-            path = self.guard.safe_join(base, "result", "data", name)
+            path = self.guard.safe_join(base, "data", name) if base.name == "engine" else base / name
         else:
             raise FlowError("file_not_found", "파일이 없다", 404)
         if not path.is_file():

@@ -44,6 +44,9 @@ export type ResultSummary = {
   before?: Record<string, number>;
   after?: Record<string, number>;
   not_approved?: number;
+  attempt?: number;
+  stage?: string;
+  audit?: { passed: boolean; checked_cells: number; changed_cells: number; allowed_cells: number };
   error?: string;
 };
 export type Run = {
