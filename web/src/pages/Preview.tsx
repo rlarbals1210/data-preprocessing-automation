@@ -1,9 +1,9 @@
 import { Alert, Badge, Button, Card, Checkbox, Code, Group, Loader, Modal, Stack, Table, Text } from '@mantine/core';
 import { IconArrowRight, IconCheck } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, type Run } from '../api';
+import { FINISHED, api, type Run } from '../api';
 import { CHANGE, CODE, fmt } from '../labels';
 
 export default function Preview({ run }: { run: Run }) {
@@ -11,18 +11,22 @@ export default function Preview({ run }: { run: Run }) {
   const [open, setOpen] = useState(false);
   const qc = useQueryClient();
   const nav = useNavigate();
+  useEffect(() => {
+    if (p.data && run.status === 'diagnosed') qc.invalidateQueries({ queryKey: ['run', run.id] });
+  }, [p.data, run.status, run.id, qc]);
   const select = useMutation({
     mutationFn: (ids: string[]) => api.select(run.id, ids),
     onSuccess: (data) => qc.setQueryData(['preview', run.id], data),
   });
   const execute = useMutation({
-    mutationFn: () => api.execute(run.id),
+    mutationFn: () => api.execute(run.id, p.data!.approval),
     onSuccess: () => {
       setOpen(false);
       ['run', 'result', 'changes'].forEach((k) => qc.invalidateQueries({ queryKey: [k, run.id] }));
       qc.invalidateQueries({ queryKey: ['runs'] });
       nav(`/runs/${run.id}/result`);
     },
+    onError: () => qc.invalidateQueries({ queryKey: ['preview', run.id] }),
   });
   if (p.isLoading) return <Loader />;
   if (p.error || !p.data) return <Alert color="red">{(p.error as Error)?.message}</Alert>;
@@ -32,6 +36,7 @@ export default function Preview({ run }: { run: Run }) {
   const toggle = (id: string, on: boolean) =>
     select.mutate(on ? [...approved, id] : approved.filter((a) => a !== id));
   const allOn = approved.length === selectable.length;
+  const finished = FINISHED.includes(run.status);
 
   return (
     <Stack>
@@ -50,7 +55,11 @@ export default function Preview({ run }: { run: Run }) {
           )}
           {select.isPending && <Loader size="xs" />}
         </Group>
-        <Button leftSection={<IconCheck size={16} />} disabled={!x.total_cells || select.isPending} onClick={() => setOpen(true)}>
+        <Button
+          leftSection={<IconCheck size={16} />}
+          disabled={finished || !x.total_cells || select.isPending}
+          onClick={() => setOpen(true)}
+        >
           최종 확인
         </Button>
       </Group>
@@ -61,6 +70,7 @@ export default function Preview({ run }: { run: Run }) {
             <Table.Tr>
               <Table.Th w={40}>
                 <Checkbox
+                  disabled={finished}
                   checked={allOn}
                   indeterminate={!allOn && approved.length > 0}
                   onChange={() => select.mutate(allOn ? [] : selectable.map((g) => g.id))}
@@ -78,7 +88,7 @@ export default function Preview({ run }: { run: Run }) {
             {x.groups.map((g) => (
               <Table.Tr key={g.id} style={{ opacity: g.approved || !g.cells ? 1 : 0.5 }}>
                 <Table.Td>
-                  <Checkbox checked={g.approved} disabled={!g.cells} onChange={(e) => toggle(g.id, e.currentTarget.checked)} />
+                  <Checkbox checked={g.approved} disabled={finished || !g.cells} onChange={(e) => toggle(g.id, e.currentTarget.checked)} />
                 </Table.Td>
                 <Table.Td ff="monospace">{g.table}</Table.Td>
                 <Table.Td ff="monospace">{g.column}</Table.Td>

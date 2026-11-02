@@ -28,7 +28,15 @@ export type FileEntry = {
   confirmed: boolean;
 };
 export type Catalog = Record<string, { columns: string[]; required: string[] }>;
-export type RunStatus = 'uploaded' | 'diagnosed' | 'executed' | 'failed';
+export type RunStatus =
+  | 'uploaded'
+  | 'needs_confirmation'
+  | 'diagnosed'
+  | 'awaiting_approval'
+  | 'completed'
+  | 'completed_with_issues'
+  | 'failed';
+export const FINISHED: RunStatus[] = ['completed', 'completed_with_issues', 'failed'];
 export type ResultSummary = {
   status: 'completed' | 'completed_with_issues' | 'failed';
   changed_cells?: number;
@@ -108,6 +116,7 @@ export type PreviewData = {
   held: number;
   plan_hash: string;
   view_hash: string;
+  approval: Record<string, string | null>;
 };
 export type Change = {
   table: string;
@@ -176,7 +185,12 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approved_groups }),
     }),
-  execute: (id: string) => req<ResultSummary>(`/runs/${id}/execute`, { method: 'POST' }),
+  execute: (id: string, approval: Record<string, string | null>) =>
+    req<ResultSummary>(`/runs/${id}/execute`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ approval }),
+    }),
   result: (id: string) => req<ResultSummary & { files: { name: string; bytes: number }[] }>(`/runs/${id}/result`),
   changes: (id: string, offset: number, limit: number) => req<Page<Change>>(`/runs/${id}/changes${q({ offset, limit })}`),
   fileUrl: (id: string, name: string) => `/api/runs/${id}/files/${encodeURIComponent(name)}`,

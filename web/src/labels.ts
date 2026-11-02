@@ -63,8 +63,11 @@ export const SKIP_REASON: Record<string, string> = {
 
 export const RUN_STATUS: Record<string, { label: string; color: string }> = {
   uploaded: { label: '업로드됨', color: 'blue' },
+  needs_confirmation: { label: '확인 필요', color: 'orange' },
   diagnosed: { label: '진단 완료', color: 'violet' },
-  executed: { label: '실행 완료', color: 'teal' },
+  awaiting_approval: { label: '승인 대기', color: 'cyan' },
+  completed: { label: '완료', color: 'teal' },
+  completed_with_issues: { label: '완료 · 문제 남음', color: 'yellow' },
   failed: { label: '실패', color: 'red' },
 };
 

@@ -1,7 +1,8 @@
-"""웹 미리보기용 실행 흐름 (2026-11-02 규민님 요청으로 M3 화면을 먼저 확인하기 위한 임시 경로).
+"""웹 실행 흐름 (2026-11-02 규민님 요청으로 M3 화면을 먼저 만들고 M1 모듈로 하나씩 바꿔 끼우는 중).
 
-업로드 → 헤더 대응(legacy-header-map 정확 일치) → 실행 계획(간이) → 표준화 뷰 → 진단 → 변경 미리보기 → 정제.
-상태는 workspace/runs/<id>/run.json에 둔다. M1의 매핑·실행 계획·승인 해시·SQLite·발행이 완성되면 이 모듈을 대체한다.
+업로드(M1-4) → 매핑 제안·구조 승인(M1-5) → 실행 계획(M1-6) → 표준화 뷰(M1-7) → 진단 → 적용 계획(M1-9)
+→ 실행 승인(해시 7종, M1-10a) → 정제. 실행 상태·승인은 DB(prep/runs.py)가 정본이고,
+run.json에는 화면용 파일 목록·매핑 초안·결과 요약만 둔다. 결과 발행(result_version)은 M1-10c에서 바꾼다.
 모든 경로는 guard를 거치고, 설정은 스냅샷에서만 읽는다.
 """
 
@@ -24,7 +25,8 @@ from prep.apply import groups as apply_groups
 from prep.guard import Guard
 from prep.mapping import Catalog, propose, validate_final
 from prep.plan import build_plan
-from prep.snapshot import create_snapshot
+from prep.runs import ApprovalError, RunLedger
+from prep.snapshot import SnapshotError, create_snapshot, load_snapshot
 from prep.store import Store
 from prep.upload import BlobStore, UploadError, ingest
 from prep.view import Locator, ViewInput, build_view, strip_extras
@@ -33,6 +35,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SETS = {"shop": "쇼핑몰 표준", "none": "설정 없음"}
 RUN_ID = re.compile(r"[0-9]{8}T[0-9]{6}Z-[0-9a-f]{6}")
 FILE_NAME = re.compile(r"[A-Za-z0-9가-힣_.-]{1,100}\.csv")
+FINISHED = {"completed", "completed_with_issues", "failed"}
 
 
 class FlowError(ValueError):
@@ -50,6 +53,7 @@ class Workspace:
         self.runs.mkdir(exist_ok=True)
         self.store = Store(self.root, self.guard)
         self.blobs = BlobStore(self.root, self.guard)
+        self.ledger = RunLedger(self.store)
 
     # ---- 저장 ----
     def run_dir(self, run_id: str) -> Path:
@@ -62,13 +66,25 @@ class Workspace:
 
     def load(self, run_id: str) -> dict:
         run = json.loads((self.run_dir(run_id) / "run.json").read_text(encoding="utf-8"))
-        if any("mapping" not in f for f in run["files"]):
-            raise FlowError("legacy_run", "매핑(M1-5) 이전에 만든 실행이다. 새로 업로드하세요", 410)
+        if "db_run" not in run:
+            raise FlowError("legacy_run", "실행 기록(M1-10a) 이전에 만든 실행이다. 새로 업로드하세요", 410)
+        run["status"] = self.store.run(run["db_run"])["status"]  # 상태 정본은 DB
         return run
 
+    def _transition(self, run: dict, to: str, reason: str | None = None) -> None:
+        if run["status"] != to:
+            self.store.transition(run["db_run"], to, reason)
+            run["status"] = to
+
+    def _open(self, run: dict) -> None:
+        if run["status"] in FINISHED:
+            raise FlowError("finished_run", "끝난 실행이다. 새로 업로드하거나 다시 시도하세요", 409)
+
     def view(self, run_id: str) -> dict:
-        """화면용: 실행 + 표준 목록(테이블 → 컬럼, 필수 컬럼)."""
+        """화면용: 실행 + 표준 목록(테이블 → 컬럼, 필수 컬럼) + 승인 기록."""
         run = self.load(run_id)
+        run["approvals"] = [{k: a[k] for k in ("id", "kind", "created_at", "invalidated_at", "invalidated_reason")}
+                            for a in self.ledger.approvals(run["db_run"])]
         cat = self._catalog(run)
         run["catalog"] = None if cat is None else {
             t: {"columns": cols, "required": cat.required.get(t, [])} for t, cols in cat.columns.items()}
@@ -91,7 +107,8 @@ class Workspace:
     def save(self, run: dict) -> None:
         path = self.guard.safe_join(self.runs, run["id"], "run.json")
         tmp = path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(run, ensure_ascii=False, indent=2), encoding="utf-8")
+        body = {k: v for k, v in run.items() if k not in ("status", "catalog", "approvals")}
+        tmp.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(path)
 
     def list_runs(self) -> list[dict]:
@@ -99,8 +116,9 @@ class Workspace:
         for p in sorted(self.runs.iterdir(), reverse=True):
             if RUN_ID.fullmatch(p.name) and (p / "run.json").is_file():
                 r = json.loads((p / "run.json").read_text(encoding="utf-8"))
-                if any("mapping" not in f for f in r["files"]):
-                    continue  # 매핑 이전 실행은 목록에서 뺀다
+                if "db_run" not in r:
+                    continue  # 실행 기록 이전 실행은 목록에서 뺀다
+                r["status"] = self.store.run(r["db_run"])["status"]
                 items.append({k: r.get(k) for k in ("id", "created_at", "set", "source", "status", "rows", "result")}
                              | {"file_count": len(r["files"])})
         return items
@@ -116,10 +134,9 @@ class Workspace:
         now = datetime.now(UTC)
         run_id = now.strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(3)
         self.guard.safe_join(self.runs, run_id).mkdir()
-        snapshot = create_snapshot(PROJECT_ROOT, "shop", self.root, self.guard) if set_name == "shop" else None
-        if snapshot:
-            self.store.add_config_snapshot(snapshot.hash, "shop", f"config-snapshots/{snapshot.hash}",
-                                           list(snapshot.files))
+        shop = create_snapshot(PROJECT_ROOT, "shop", self.root, self.guard)
+        snap_id = self.store.add_config_snapshot(shop.hash, "shop", f"config-snapshots/{shop.hash}", list(shop.files))
+        snapshot = shop if set_name == "shop" else None
         cat = self._catalog({"snapshot": snapshot.hash}) if snapshot else None
         entries = []
         for item in uploaded["items"]:
@@ -140,12 +157,27 @@ class Workspace:
                 f["mapping"] = _mapping_of(f["proposal"])
                 f["confirmed"] = False  # 구조 승인은 매번 사용자가 한다
             entries.append(f)
+        db_run = self.ledger.start(uploaded["batch_id"], snap_id)
         run = {"id": run_id, "created_at": now.isoformat(), "set": set_name, "source": source.strip(),
-               "batch_id": uploaded["batch_id"], "status": "uploaded",
-               "snapshot": snapshot.hash if snapshot else None, "files": entries,
+               "batch_id": uploaded["batch_id"], "db_run": db_run, "status": "uploaded",
+               "snapshot": snapshot.hash if snapshot else None, "config_hash": shop.hash, "files": entries,
                "rows": sum(f.get("rows", 0) for f in entries), "plan": None, "result": None}
+        if cat is None:  # 설정 없음: 고를 매핑이 없으므로 구조를 그대로 확정한다
+            self._record_structure(run)
+        else:
+            self._transition(run, "needs_confirmation", "mapping")
         self.save(run)
         return run
+
+    def _record_structure(self, run: dict) -> None:
+        """실행 대상(순서·제외 사유)과 매핑 버전·구조 승인을 DB에 남긴다."""
+        targets = [{"upload_item_id": f["item_id"], "included": bool(not f["read_error"] and f["mapping"]["table"]),
+                    "exclusion_reason": None if not f["read_error"] and f["mapping"]["table"]
+                    else ("read_error" if f["read_error"] else "user_excluded")} for f in run["files"]]
+        self.ledger.set_targets(run["db_run"], targets)
+        self.ledger.record_mapping(run["db_run"],
+                                   {str(f["item_id"]): f["proposal"] for f in run["files"] if f["proposal"]},
+                                   {str(f["item_id"]): f["mapping"] for f in run["files"]})
 
     # ---- 매핑 (M1-5) ----
     def propose_table(self, run_id: str, item_id: int, table: str) -> dict:
@@ -159,6 +191,7 @@ class Workspace:
     def confirm_mapping(self, run_id: str, files: list[dict]) -> dict:
         """구조 승인: 사용자가 확인·수정한 매핑을 확정한다. 자동 제안(proposal)은 그대로 둔다(AC-03-2)."""
         run = self.load(run_id)
+        self._open(run)
         cat = self._catalog(run)
         if cat is None:
             raise FlowError("bad_mapping", "설정 없음 실행은 매핑이 없다")
@@ -187,14 +220,16 @@ class Workspace:
             new = {"table": x.get("table"), "columns": dict(x.get("columns") or {}) if x.get("table") else {}}
             changed = changed or new != f["mapping"]
             f.update(mapping=new, confirmed=True)
-        if changed and run["status"] != "uploaded":  # AC-03-5: 매핑이 바뀌면 이전 진단·결과 무효
+        if changed and run["status"] in ("diagnosed", "awaiting_approval"):  # AC-03-5: 이전 진단·승인 무효
             base = self.run_dir(run_id)
             for name in ("report.json", "engine-config.json", "apply-plan.json"):
                 (base / name).unlink(missing_ok=True)
             for sub in ("result", "view"):
                 if (base / sub).exists():
                     _remove_tree(base / sub)
-            run.update(status="uploaded", plan=None, result=None)
+            run.update(plan=None, result=None)
+            self._transition(run, "needs_confirmation", "mapping_changed")
+        self._record_structure(run)  # 실행 대상·매핑 버전·구조 승인(이전 실행 승인은 무효화)
         self.store.record_event("batch", run["batch_id"], "mapping_confirmed",
                                 {"run": run_id, "changed": changed,
                                  "auto_unchanged": all(f["mapping"] == _mapping_of(f["proposal"])
@@ -205,8 +240,7 @@ class Workspace:
     # ---- 진단 ----
     def diagnose(self, run_id: str) -> dict:
         run = self.load(run_id)
-        if "batch_id" not in run:
-            raise FlowError("legacy_run", "원본 보관(M1-4) 이전에 만든 실행이라 다시 진단할 수 없다. 새로 업로드하세요", 409)
+        self._open(run)
         base = self.run_dir(run_id)
         if not all(f["confirmed"] for f in run["files"]):
             raise FlowError("mapping_unconfirmed", "매핑을 확정해야 진단할 수 있다", 409)  # AC-03-3
@@ -241,9 +275,13 @@ class Workspace:
             plan = build_plan(logical, present)  # M1-6
             config = plan["config"]
         (base / "apply-plan.json").unlink(missing_ok=True)  # 새 진단 → 이전 선택 무효
+        plan_record = plan or {"executed": [], "skipped": [], "tables": {}, "hash": _empty_plan_hash()}
+        self.ledger.record_plan(run["db_run"], plan_record)  # 이전 실행 승인 무효화
+        self.ledger.record_view(run["db_run"], f"runs/{run_id}/view", built.hash)
         report = Locator(built.lineage).translate_report(diagnose(view, config))
         (base / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
-        run.update(status="diagnosed", result=None, view_hash=built.hash,
+        self._transition(run, "diagnosed")
+        run.update(result=None, view_hash=built.hash,
                    plan=None if plan is None else {k: plan[k] for k in ("skipped", "tables", "completeness", "hash")})
         (base / "engine-config.json").write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
         result = self.guard.safe_join(base, "result")
@@ -299,42 +337,63 @@ class Workspace:
         return {"total": len(items), "items": out}
 
     def _plan(self, run_id: str) -> dict:
-        """저장된 적용 계획(없으면 전체 승인 기본값). M1-9."""
+        """저장된 적용 계획(없으면 전체 승인 기본값을 만들어 DB에 기록). M1-9·M1-10a."""
         run, report = self.load(run_id), self._report(run_id)
         path = self.run_dir(run_id) / "apply-plan.json"
         if path.is_file():
             return json.loads(path.read_text(encoding="utf-8"))
-        return build_apply_plan(report, run["view_hash"])
+        plan = build_apply_plan(report, run["view_hash"])
+        if run["status"] not in FINISHED:
+            self._store_plan(run, plan)
+        return plan
+
+    def _store_plan(self, run: dict, plan: dict) -> None:
+        self.ledger.record_apply_plan(run["db_run"], plan)  # 이전 실행 승인 무효화
+        path = self.guard.safe_join(self.run_dir(run["id"]), "apply-plan.json")
+        path.write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
 
     def changes_preview(self, run_id: str) -> dict:
         report = self._report(run_id)
         cells, held = apply_candidates(report)
         plan = self._plan(run_id)
+        run = self.load(run_id)
+        if run["status"] == "diagnosed":
+            self._transition(run, "awaiting_approval")
         approved = set(plan["approved_groups"])
         out = [g | {"approved": g["id"] in approved} for g in apply_groups(cells, held)]
         return {"groups": out, "total_cells": plan["counts"]["allowed"], "candidates": plan["counts"]["candidates"],
-                "held": plan["counts"]["held"], "plan_hash": plan["hash"], "view_hash": plan["view_hash"]}
+                "held": plan["counts"]["held"], "plan_hash": plan["hash"], "view_hash": plan["view_hash"],
+                "approval": self.ledger.current_hashes(run["db_run"])}
 
     def select(self, run_id: str, selection: dict) -> dict:
         """사용자 선택 → 서버가 검증한 적용 계획(T-08)."""
         run, report = self.load(run_id), self._report(run_id)
+        self._open(run)
         try:
             plan = build_apply_plan(report, run["view_hash"], selection)
         except (ApplyError, TypeError, ValueError) as exc:
             raise FlowError("bad_selection", str(exc)) from exc
-        path = self.guard.safe_join(self.run_dir(run_id), "apply-plan.json")
-        path.write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
+        self._store_plan(run, plan)
         return self.changes_preview(run_id)
 
     # ---- 실행 ----
-    def execute(self, run_id: str) -> dict:
+    def execute(self, run_id: str, presented: dict) -> dict:
+        """실행 승인(화면이 보여 준 해시 7종) → 재확인 → 정제. AC-06-4·AC-07-6."""
         run = self.load(run_id)
+        self._open(run)
+        if run["status"] != "awaiting_approval":
+            raise FlowError("not_ready", "미리보기를 먼저 확인해야 한다", 409)
         base = self.run_dir(run_id)
         report = self._report(run_id)
         plan = self._plan(run_id)
         try:
+            approval = self.ledger.approve_execution(run["db_run"], presented or {})
+            load_snapshot(self.root, run["config_hash"], self.guard)  # 승인 뒤 설정 스냅샷 변조 확인
+            self.ledger.check_execution(run["db_run"], approval)
             verify_plan(plan, report, run["view_hash"])  # 승인 때와 뷰·후보가 같은지
-        except ApplyError as exc:
+        except ApprovalError as exc:
+            raise FlowError("approval_mismatch", str(exc), 409) from exc
+        except (SnapshotError, ApplyError) as exc:
             raise FlowError("stale_plan", str(exc), 409) from exc
         config = json.loads((base / "engine-config.json").read_text(encoding="utf-8"))
         result = self.guard.safe_join(base, "result")
@@ -346,16 +405,18 @@ class Workspace:
             if out["changed_cells"] != plan["counts"]["allowed"]:
                 raise ValueError("실행 변경 건수가 적용 계획과 다르다")  # AC-06-5
         except Exception as exc:  # 정제 실패는 실행 결과로 보여 준다
-            run.update(status="failed", result={"status": "failed", "error": f"{type(exc).__name__}: {exc}"})
+            run.update(result={"status": "failed", "error": f"{type(exc).__name__}: {exc}"})
+            self._transition(run, "failed", f"{type(exc).__name__}")
             self.save(run)
             return run["result"]
         remaining = out["after_categories"]
         status = "completed_with_issues" if remaining.get("business_rule_violation") or remaining.get(
             "human_review") else "completed"
-        run.update(status="executed", result={"status": status, "changed_cells": out["changed_cells"],
+        self._transition(run, status)
+        run.update(result={"status": status, "changed_cells": out["changed_cells"],
                                               "rows": out["rows"], "before": out["before_categories"],
                                               "after": remaining, "not_approved": out["not_approved_cells"],
-                                              "plan_hash": plan["hash"]})
+                                              "plan_hash": plan["hash"], "approval": approval})
         self.save(run)
         return run["result"]
 
@@ -398,6 +459,12 @@ class Workspace:
         if name == "changes.csv":
             return path.read_bytes()
         return strip_extras(path.read_text(encoding="utf-8")).encode("utf-8")  # 보조 컬럼은 출력하지 않는다
+
+
+def _empty_plan_hash() -> str:
+    import hashlib
+
+    return hashlib.sha256(b"profile-only").hexdigest()
 
 
 def _remove_tree(path: Path) -> None:

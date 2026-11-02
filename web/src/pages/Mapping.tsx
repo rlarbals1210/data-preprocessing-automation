@@ -3,7 +3,7 @@ import { IconArrowRight, IconCheck } from '@tabler/icons-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { api, type FileEntry, type Mapping as MappingT, type Proposal, type Run } from '../api';
+import { FINISHED, api, type FileEntry, type Mapping as MappingT, type Proposal, type Run } from '../api';
 import { GRADE, REASON, TABLE_BASIS, fmt } from '../labels';
 
 const EXCLUDE = '__exclude__';
@@ -26,6 +26,7 @@ export default function Mapping({ run }: { run: Run }) {
   const readable = run.files.filter((f) => !f.read_error);
   const dirty = readable.some((f) => !same({ table: drafts[f.item_id].table, columns: drafts[f.item_id].columns }, f.mapping));
   const allConfirmed = run.files.every((f) => f.confirmed);
+  const finished = FINISHED.includes(run.status);
 
   const tableCount: Record<string, number> = {};
   readable.forEach((f) => {
@@ -108,7 +109,7 @@ export default function Mapping({ run }: { run: Run }) {
             <Button
               variant={dirty || !allConfirmed ? 'filled' : 'light'}
               leftSection={<IconCheck size={16} />}
-              disabled={blocking || (!dirty && allConfirmed)}
+              disabled={finished || blocking || (!dirty && allConfirmed)}
               loading={confirm.isPending}
               onClick={() => confirm.mutate()}
             >
@@ -117,11 +118,11 @@ export default function Mapping({ run }: { run: Run }) {
           )}
           <Button
             rightSection={<IconArrowRight size={16} />}
-            disabled={!allConfirmed || dirty}
+            disabled={finished || !allConfirmed || dirty}
             loading={diagnose.isPending}
             onClick={() => diagnose.mutate()}
           >
-            {run.status === 'uploaded' ? '진단 실행' : '다시 진단'}
+            {['uploaded', 'needs_confirmation'].includes(run.status) ? '진단 실행' : '다시 진단'}
           </Button>
         </Group>
       </Group>

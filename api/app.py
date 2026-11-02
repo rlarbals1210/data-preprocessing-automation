@@ -29,8 +29,10 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
 
     @app.exception_handler(FlowError)
     async def flow_error(_: Request, exc: FlowError):
+        details = getattr(exc.__cause__, "mismatched", None)
         return JSONResponse(status_code=exc.status,
-                            content={"code": exc.code, "message": exc.message, "details": None, "location": None})
+                            content={"code": exc.code, "message": exc.message,
+                                     "details": {"mismatched": details} if details else None, "location": None})
 
     @app.exception_handler(PermissionError)
     async def denied(_: Request, exc: PermissionError):
@@ -94,8 +96,8 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
         return ws.select(run_id, body)
 
     @app.post("/api/runs/{run_id}/execute")
-    def execute(run_id: str):
-        return ws.execute(run_id)
+    def execute(run_id: str, body: Annotated[dict | None, Body()] = None):
+        return ws.execute(run_id, (body or {}).get("approval") or {})
 
     @app.get("/api/runs/{run_id}/result")
     def result(run_id: str):

@@ -1,22 +1,24 @@
 import { Badge, Group, Loader, Stepper, Text, Title } from '@mantine/core';
 import { useQuery } from '@tanstack/react-query';
 import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { api, type Run } from '../api';
+import { FINISHED, api, type Run } from '../api';
 import { RUN_STATUS, SET_LABEL, when } from '../labels';
 import Diagnosis from './Diagnosis';
 import Mapping from './Mapping';
 import Preview from './Preview';
 import Result from './Result';
 
+const DIAGNOSED: Run['status'][] = ['diagnosed', 'awaiting_approval', ...FINISHED];
+
 type Step = { key: string; label: string; ready?: (r: Run) => boolean; disabled?: boolean };
 const STEPS: Step[] = [
   { key: 'upload', label: '업로드', disabled: true },
   { key: 'drift', label: '스키마 변경', disabled: true },
   { key: 'mapping', label: '매핑 확인', ready: () => true },
-  { key: 'diagnosis', label: '진단', ready: (r) => r.status !== 'uploaded' },
+  { key: 'diagnosis', label: '진단', ready: (r) => DIAGNOSED.includes(r.status) },
   { key: 'integrity', label: '정합성', disabled: true },
-  { key: 'preview', label: '미리보기·승인', ready: (r) => r.status !== 'uploaded' },
-  { key: 'result', label: '결과', ready: (r) => r.status === 'executed' || r.status === 'failed' },
+  { key: 'preview', label: '미리보기·승인', ready: (r) => DIAGNOSED.includes(r.status) },
+  { key: 'result', label: '결과', ready: (r) => FINISHED.includes(r.status) },
 ];
 
 export default function RunPage() {
@@ -29,7 +31,13 @@ export default function RunPage() {
   const r = run.data;
   const current = pathname.split('/')[3] ?? '';
   const active = STEPS.findIndex((s) => s.key === current);
-  const start = r.status === 'executed' || r.status === 'failed' ? 'result' : r.status === 'diagnosed' ? 'diagnosis' : 'mapping';
+  const start = FINISHED.includes(r.status)
+    ? 'result'
+    : r.status === 'awaiting_approval'
+      ? 'preview'
+      : r.status === 'diagnosed'
+        ? 'diagnosis'
+        : 'mapping';
 
   return (
     <>

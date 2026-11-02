@@ -35,10 +35,10 @@ def seed(db):
 
 
 def test_migration_and_reopen(ws, db):
-    assert db.version == len(st.MIGRATIONS) == 1
+    assert db.version == len(st.MIGRATIONS) >= 2
     db.close()
     again = st.Store(ws, Guard([ws], project_root=ws.parent / "project"))
-    assert again.version == 1
+    assert again.version == len(st.MIGRATIONS)
     tables = {r[0] for r in again.conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert {"config_snapshot", "source", "batch", "upload_item", "run", "run_target", "event"} <= tables
     again.close()

@@ -173,6 +173,87 @@ MIGRATIONS: list[str] = [
 ]
 
 
+_LIFECYCLE = ("mapping_version", "run_plan", "view_snapshot", "apply_plan")
+MIGRATIONS.append(
+    # 2: M1-10a 실행 수명주기·승인 해시
+    f"""
+    CREATE TABLE mapping_version (
+        id INTEGER PRIMARY KEY,
+        run_id INTEGER NOT NULL REFERENCES run(id),
+        version INTEGER NOT NULL CHECK (version >= 1),
+        auto_proposal TEXT NOT NULL CHECK (json_valid(auto_proposal)),
+        final TEXT NOT NULL CHECK (json_valid(final)),
+        hash TEXT NOT NULL CHECK (length(hash) = 64),
+        created_at TEXT NOT NULL DEFAULT {_NOW},
+        UNIQUE (run_id, version));
+
+    CREATE TABLE run_plan (
+        id INTEGER PRIMARY KEY,
+        run_id INTEGER NOT NULL REFERENCES run(id),
+        mapping_version_id INTEGER NOT NULL REFERENCES mapping_version(id),
+        executed_rules TEXT NOT NULL CHECK (json_valid(executed_rules)),
+        skipped_rules TEXT NOT NULL CHECK (json_valid(skipped_rules)),
+        tables TEXT NOT NULL CHECK (json_valid(tables)),
+        integrity_enabled TEXT NOT NULL DEFAULT '[]' CHECK (json_valid(integrity_enabled)),
+        hash TEXT NOT NULL CHECK (length(hash) = 64),
+        created_at TEXT NOT NULL DEFAULT {_NOW});
+
+    CREATE TABLE view_snapshot (
+        id INTEGER PRIMARY KEY,
+        run_id INTEGER NOT NULL REFERENCES run(id),
+        run_plan_id INTEGER NOT NULL REFERENCES run_plan(id),
+        path TEXT NOT NULL,
+        hash TEXT NOT NULL CHECK (length(hash) = 64),
+        created_at TEXT NOT NULL DEFAULT {_NOW});
+
+    CREATE TABLE apply_plan (
+        id INTEGER PRIMARY KEY,
+        run_id INTEGER NOT NULL REFERENCES run(id),
+        view_snapshot_id INTEGER NOT NULL REFERENCES view_snapshot(id),
+        candidates_hash TEXT NOT NULL CHECK (length(candidates_hash) = 64),
+        approved_groups TEXT NOT NULL CHECK (json_valid(approved_groups)),
+        excluded TEXT NOT NULL CHECK (json_valid(excluded)),
+        allow TEXT NOT NULL CHECK (json_valid(allow)),
+        hash TEXT NOT NULL CHECK (length(hash) = 64),
+        created_at TEXT NOT NULL DEFAULT {_NOW});
+
+    CREATE TABLE approval (
+        id INTEGER PRIMARY KEY,
+        run_id INTEGER NOT NULL REFERENCES run(id),
+        kind TEXT NOT NULL CHECK (kind IN ('structure', 'execution', 'reuse')),
+        subject_id INTEGER,
+        input_hash TEXT, mapping_hash TEXT, plan_hash TEXT, view_hash TEXT,
+        candidate_hash TEXT, apply_hash TEXT, config_hash TEXT,
+        created_at TEXT NOT NULL DEFAULT {_NOW},
+        invalidated_at TEXT,
+        invalidated_reason TEXT,
+        CHECK ((invalidated_at IS NULL) = (invalidated_reason IS NULL)),
+        CHECK (kind != 'execution' OR (input_hash IS NOT NULL AND mapping_hash IS NOT NULL AND plan_hash IS NOT NULL
+               AND view_hash IS NOT NULL AND candidate_hash IS NOT NULL AND apply_hash IS NOT NULL
+               AND config_hash IS NOT NULL)));
+
+    {_guards(_LIFECYCLE, _LIFECYCLE + ("approval",))}
+
+    -- 승인: 바꿀 수 있는 것은 무효화 표시(한 번)뿐이다.
+    CREATE TRIGGER approval_update_guard BEFORE UPDATE ON approval
+    WHEN OLD.invalidated_at IS NOT NULL OR NEW.invalidated_at IS NULL
+      OR NEW.id IS NOT OLD.id OR NEW.run_id IS NOT OLD.run_id OR NEW.kind IS NOT OLD.kind
+      OR NEW.subject_id IS NOT OLD.subject_id OR NEW.input_hash IS NOT OLD.input_hash
+      OR NEW.mapping_hash IS NOT OLD.mapping_hash OR NEW.plan_hash IS NOT OLD.plan_hash
+      OR NEW.view_hash IS NOT OLD.view_hash OR NEW.candidate_hash IS NOT OLD.candidate_hash
+      OR NEW.apply_hash IS NOT OLD.apply_hash OR NEW.config_hash IS NOT OLD.config_hash
+      OR NEW.created_at IS NOT OLD.created_at
+    BEGIN SELECT RAISE(ABORT, 'append-only: 승인은 무효화 표시만 한 번 할 수 있다'); END;
+
+    CREATE TRIGGER approval_invalidated_event AFTER UPDATE OF invalidated_at ON approval
+    BEGIN
+        INSERT INTO event (subject_type, subject_id, kind, payload)
+        VALUES ('run', NEW.run_id, 'approval_invalidated',
+                json_object('approval', NEW.id, 'kind', NEW.kind, 'reason', NEW.invalidated_reason));
+    END;
+    """)
+
+
 class StoreError(RuntimeError):
     pass
 
