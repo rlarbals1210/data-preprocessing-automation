@@ -95,6 +95,11 @@ JSON은 파일 SHA-256, 실행 설정, 테이블 프로파일, 각 항목의 원
 레코드 번호는 헤더 다음을 1로 센다. 여러 줄 필드는 물리 줄 범위와 구분한다.
 참조 대상이 없어 검사할 수 없으면 건너뛴 이유를 별도로 기록한다. 근거 없이 모든 자식 행을 참조 오류로 처리하지 않는다.
 
+`rule_execution`은 규칙별 실행 기록이다. 항목마다 `table`·`kind`·`columns`(참조는 `target` 추가)·`executed`·`reason`을 가진다. 문제 0건인 규칙도 실행됐으면 `executed: true`로 남으므로, 실행 여부는 문제 코드별 건수인 `summary.rule_counts`가 아니라 이 목록으로 확인한다.
+
+- `kind`: `profile`(설정 없이 하는 기본 관측) · 컬럼 규칙 `required`·`required_if`·`missing_values`·`comparison_normalization`(strip/casefold)·`allowed`·`pattern`·`type`(string 외)·`min`·`max`·`standardization` · 테이블 규칙 `unique`·`reference`.
+- `reason`(실행 안 됨): `read_error` 파일 읽기 실패 · `table_unavailable` 설정한 테이블 입력 없음 · `columns_unavailable` 설정 컬럼 일부 없음(그 테이블 규칙 전체 제외) · `reference_target_unavailable` 참조 대상 테이블을 검사할 수 없음.
+
 ## 범위와 한계
 
 v1은 메모리에 CSV 전체를 읽는 소규모 데이터용이다. XLSX·비정형 문서·MySQL 직접 입력·스트리밍은 후속이다.

@@ -189,6 +189,64 @@ def shape(value):
     return 'text'
 
 
+def column_rule_kinds(rule):
+    """한 컬럼 규칙에서 실제로 검사·후보 생성을 일으키는 규칙 종류 (엔진 확장 ①)."""
+    kinds = []
+    if rule.get('required') is True:
+        kinds.append('required')
+    if 'required_if' in rule:
+        kinds.append('required_if')
+    if 'missing_values' in rule:
+        kinds.append('missing_values')
+    if rule.get('strip') or rule.get('casefold'):
+        kinds.append('comparison_normalization')
+    kinds += [k for k in ('allowed', 'pattern') if k in rule]
+    if rule.get('type', 'string') != 'string':
+        kinds.append('type')
+    kinds += [k for k in ('min', 'max', 'standardization') if k in rule]
+    return kinds
+
+
+def rule_execution(specs, tables, ready, read_failed):
+    """규칙별 실행 기록. rule_counts(문제 코드별 건수)는 실행 증거가 아니므로 이 목록으로 확인한다.
+
+    reason: read_error(파일 읽기 실패) · table_unavailable(설정 테이블 입력 없음) ·
+    columns_unavailable(설정 컬럼 일부 없음 → 테이블 규칙 전체 제외) ·
+    reference_target_unavailable(참조 대상 테이블이 검사 불가).
+    """
+    records = []
+
+    def add(table, kind, columns, executed, reason, target=None):
+        entry = {'table': table, 'kind': kind, 'columns': list(columns)}
+        if target is not None:
+            entry['target'] = target
+        entry.update(executed=executed, reason=reason)
+        records.append(entry)
+
+    for name in tables:
+        add(name, 'profile', [], True, None)
+    for name in read_failed:
+        add(name, 'profile', [], False, 'read_error')
+    for name, spec in specs.items():
+        if name in ready:
+            reason = None
+        elif name in read_failed:
+            reason = 'read_error'
+        elif name not in tables:
+            reason = 'table_unavailable'
+        else:
+            reason = 'columns_unavailable'
+        for col, rule in spec.get('columns', {}).items():
+            for kind in column_rule_kinds(rule):
+                add(name, kind, [col], reason is None, reason)
+        for group in spec.get('unique', []):
+            add(name, 'unique', group, reason is None, reason)
+        for ref in spec.get('references', []):
+            ref_reason = reason or (None if ref['table'] in ready else 'reference_target_unavailable')
+            add(name, 'reference', ref['columns'], ref_reason is None, ref_reason, ref['table'])
+    return records
+
+
 def diagnose(input_path, config=None, encoding='utf-8-sig', delimiter=','):
     config = validate_config({} if config is None else config)
     path = Path(input_path)
@@ -201,6 +259,7 @@ def diagnose(input_path, config=None, encoding='utf-8-sig', delimiter=','):
     if len(names) != len(set(names)):
         raise ValueError('Duplicate table names')
     tables, summaries, issues, errors, skipped = {}, {}, [], [], []
+    read_failed = []
     specs = config.get('tables', {})
     candidates = {v.strip().casefold() for v in config.get('missing_candidates', CANDIDATES)}
 
@@ -218,6 +277,7 @@ def diagnose(input_path, config=None, encoding='utf-8-sig', delimiter=','):
             tables[name] = table
         except (OSError, UnicodeError, ValueError, csv.Error) as exc:
             errors.append({'table': name, 'file': str(file), 'error': str(exc)})
+            read_failed.append(name)
             continue
         rows = table['rows']
         profiles = {}
@@ -340,4 +400,5 @@ def diagnose(input_path, config=None, encoding='utf-8-sig', delimiter=','):
                         'category_counts': category_counts,
                         'rule_counts': dict(Counter(i['code'] for i in issues)),
                         'unconfigured_tables': sorted(set(tables) - set(specs))},
-            'duplicate_groups': duplicate_groups, 'tables': summaries, 'issues': issues, 'errors': errors, 'skipped_rules': skipped}
+            'duplicate_groups': duplicate_groups, 'tables': summaries, 'issues': issues, 'errors': errors, 'skipped_rules': skipped,
+            'rule_execution': rule_execution(specs, tables, ready, read_failed)}
