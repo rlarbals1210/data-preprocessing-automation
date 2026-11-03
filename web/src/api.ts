@@ -241,7 +241,12 @@ export const api = {
       body: JSON.stringify({ approval }),
     }),
   result: (id: string) =>
-    req<ResultSummary & { files: { name: string; rows: number }[]; published: boolean }>(`/runs/${id}/result`),
+    req<ResultSummary & { files: { name: string; rows: number }[]; evidence: string[]; published: boolean }>(
+      `/runs/${id}/result`,
+    ),
+  remaining: (id: string, p: { category?: string | null; offset: number; limit: number }) =>
+    req<Page<Issue>>(`/runs/${id}/remaining${q(p)}`),
+  failureReportUrl: (id: string) => `/api/runs/${id}/failure-report`,
   changes: (id: string, offset: number, limit: number) => req<Page<Change>>(`/runs/${id}/changes${q({ offset, limit })}`),
   fileUrl: (id: string, name: string) => `/api/runs/${id}/files/${encodeURIComponent(name)}`,
 };

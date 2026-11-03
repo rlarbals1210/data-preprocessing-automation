@@ -1,12 +1,107 @@
-import { Alert, Anchor, Badge, Button, Card, Code, Group, Loader, Pagination, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import {
+  Alert,
+  Anchor,
+  Badge,
+  Button,
+  Card,
+  Code,
+  Group,
+  Loader,
+  Pagination,
+  SegmentedControl,
+  SimpleGrid,
+  Stack,
+  Table,
+  Text,
+  Title,
+} from '@mantine/core';
 import { IconArrowRight, IconDownload, IconRefresh } from '@tabler/icons-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { api, type Run } from '../api';
+import { SourceButton } from '../components/SourceRow';
 import { CATEGORY, CATEGORY_ORDER, CHANGE, CODE, PUBLISH_REASON, RESULT_STATUS, fmt, where } from '../labels';
 
 const PAGE = 25;
+const EVIDENCE: Record<string, string> = {
+  'changes.csv': '변경 내역 (CSV)',
+  'changes.json': '변경 내역 (JSON, 논리 null 구분)',
+  'diagnosis-before.json': '정제 전 진단',
+  'diagnosis-after.json': '정제 후 진단',
+  'held.json': '보류 목록',
+  'absent-cells.json': '원래 없던 셀',
+  'manifest.json': 'manifest',
+};
+
+function Remaining({ run, counts }: { run: Run; counts?: Record<string, number> }) {
+  const [category, setCategory] = useState<'business_rule_violation' | 'human_review'>(
+    counts?.business_rule_violation ? 'business_rule_violation' : 'human_review',
+  );
+  const [page, setPage] = useState(1);
+  const r = useQuery({
+    queryKey: ['remaining', run.id, category, page],
+    queryFn: () => api.remaining(run.id, { category, offset: (page - 1) * PAGE, limit: PAGE }),
+  });
+  return (
+    <Card withBorder>
+      <Group justify="space-between" mb="sm">
+        <Title order={5}>남은 문제</Title>
+        <SegmentedControl
+          value={category}
+          onChange={(v) => {
+            setCategory(v as typeof category);
+            setPage(1);
+          }}
+          data={(['business_rule_violation', 'human_review'] as const).map((c) => ({
+            value: c,
+            label: `${CATEGORY[c].label} ${fmt(counts?.[c])}`,
+          }))}
+        />
+      </Group>
+      <Table fz="sm" verticalSpacing={6} data-testid="remaining">
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>테이블</Table.Th>
+            <Table.Th>원본 위치</Table.Th>
+            <Table.Th>컬럼</Table.Th>
+            <Table.Th>값</Table.Th>
+            <Table.Th>규칙</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {r.data?.items.map((i, k) => (
+            <Table.Tr key={k}>
+              <Table.Td ff="monospace">{i.table}</Table.Td>
+              <Table.Td c="dimmed" style={{ whiteSpace: 'nowrap' }}>
+                <Group gap={4} wrap="nowrap">
+                  {where(i.source)}
+                  <SourceButton
+                    runId={run.id}
+                    source={i.source}
+                    highlight={i.columns.map((c) => i.source?.columns[c] ?? '').filter(Boolean)}
+                  />
+                </Group>
+              </Table.Td>
+              <Table.Td ff="monospace">{i.columns.length > 3 ? `${i.columns.length}개 컬럼` : i.columns.join(', ')}</Table.Td>
+              <Table.Td>{i.columns.length === 1 ? <Code>{i.values[i.columns[0]] || '∅'}</Code> : '—'}</Table.Td>
+              <Table.Td>
+                <Badge variant="light" color={CATEGORY[i.category].color}>
+                  {CODE[i.code] ?? i.code}
+                </Badge>
+              </Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+      {(r.data?.total ?? 0) > PAGE && (
+        <Group justify="center" mt="md">
+          <Pagination total={Math.ceil((r.data?.total ?? 0) / PAGE)} value={page} onChange={setPage} size="sm" />
+        </Group>
+      )}
+    </Card>
+  );
+}
 
 export default function Result({ run }: { run: Run }) {
   const r = useQuery({ queryKey: ['result', run.id], queryFn: () => api.result(run.id) });
@@ -55,6 +150,12 @@ export default function Result({ run }: { run: Run }) {
       {x.status === 'failed' ? (
         <Stack>
           <Alert color="red">{x.error}</Alert>
+          <Anchor href={api.failureReportUrl(run.id)} fz="sm">
+            <Group gap={6}>
+              <IconDownload size={14} />
+              실패 진단 리포트
+            </Group>
+          </Anchor>
           <Group>
             {run.retried_by ? (
               <Button component={Link} to={`/runs/${run.retried_by}`} variant="light" rightSection={<IconArrowRight size={16} />}>
@@ -146,11 +247,11 @@ export default function Result({ run }: { run: Run }) {
               </Title>
               <Group gap="xs">
                 <Badge color="gray" variant="outline">
-                  내부용
+                  원문 포함 — 내부 검토용
                 </Badge>
               </Group>
               <Stack gap={4} mt="sm">
-                {[...x.files, { name: 'changes.csv', rows: -1 }].map((f) => (
+                {x.files.map((f) => (
                   <Anchor key={f.name} href={api.fileUrl(run.id, f.name)} fz="sm">
                     <Group gap={6}>
                       <IconDownload size={14} />
@@ -160,6 +261,14 @@ export default function Result({ run }: { run: Run }) {
                           {fmt(f.rows)}행
                         </Text>
                       )}
+                    </Group>
+                  </Anchor>
+                ))}
+                {x.evidence.map((name) => (
+                  <Anchor key={name} href={api.fileUrl(run.id, name)} fz="sm" c="dimmed">
+                    <Group gap={6}>
+                      <IconDownload size={14} />
+                      {EVIDENCE[name] ?? name}
                     </Group>
                   </Anchor>
                 ))}
@@ -174,6 +283,8 @@ export default function Result({ run }: { run: Run }) {
               </Stack>
             </Card>
           </SimpleGrid>
+
+          {x.status === 'completed_with_issues' && <Remaining run={run} counts={x.after} />}
 
           <Card withBorder>
             <Title order={5} mb="sm">

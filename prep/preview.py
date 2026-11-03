@@ -37,6 +37,8 @@ SETS = {"shop": "쇼핑몰 표준", "none": "설정 없음"}
 RUN_ID = re.compile(r"[0-9]{8}T[0-9]{6}Z-[0-9a-f]{6}")
 FILE_NAME = re.compile(r"[A-Za-z0-9가-힣_.-]{1,100}\.csv")
 FINISHED = {"completed", "completed_with_issues", "failed"}
+EVIDENCE_FILES = ("changes.json", "diagnosis-before.json", "diagnosis-after.json", "held.json", "absent-cells.json",
+                  "manifest.json")  # 내부 검토용 근거 파일(FS F07 출력)
 
 
 class FlowError(ValueError):
@@ -542,7 +544,49 @@ class Workspace:
             manifest = json.loads(self.guard.safe_join(self.root, version["manifest_path"]).read_text(encoding="utf-8"))
             files = [{"name": n, "bytes": None, "rows": m["rows"]} for n, m in manifest["files"].items()
                      if n.endswith(".csv") and n != "changes.csv"]
-        return run["result"] | {"files": files, "published": version is not None}
+            evidence = ["changes.csv"] + [n for n in EVIDENCE_FILES if n in manifest["files"] or n == "manifest.json"]
+        else:
+            evidence = []
+        return run["result"] | {"files": files, "evidence": evidence, "published": version is not None}
+
+    def remaining(self, run_id: str, category: str | None, offset: int, limit: int) -> dict:
+        """남은 문제(SC08, 완료(문제 남음)): 발행된 결과의 정제 후 진단 중 위반·사람 검토, 원본 위치 포함."""
+        run = self.load(run_id)
+        engine = self._engine_dir(run)
+        lineage = json.loads((self.run_dir(run_id) / "view" / "lineage.json").read_text(encoding="utf-8"))
+        after = Locator(lineage).translate_report(json.loads((engine / "after.json").read_text(encoding="utf-8")))
+        wanted = {category} if category else {"business_rule_violation", "human_review"}
+        items = [i for i in after["issues"] if i["category"] in wanted]
+        names = {f["item_id"]: f["name"] for f in run["files"]}
+        keep = ("table", "record", "columns", "values", "code", "category", "source", "detail")
+        out = []
+        for i in items[offset: offset + limit]:
+            item = {k: i.get(k) for k in keep}
+            if item["source"]:
+                item["source"] = item["source"] | {"file": names.get(item["source"]["item_id"])}
+            out.append(item)
+        return {"total": len(items), "items": out}
+
+    def failure_report(self, run_id: str) -> dict:
+        """실패 진단 리포트(AC-07-2): 실패한 실행에서 내려받을 수 있는 유일한 산출물. 결과 데이터는 넣지 않는다."""
+        run = self.load(run_id)
+        if run["status"] != "failed":
+            raise FlowError("not_failed", "실패한 실행만 실패 진단 리포트가 있다", 404)
+        attempt = self.store.conn.execute("SELECT * FROM attempt WHERE run_id = ? ORDER BY number DESC LIMIT 1",
+                                          (run["db_run"],)).fetchone()
+        report = self._report(run_id)
+        out = {"run_id": run_id, "status": "failed", "source": run["source"], "config_hash": run["config_hash"],
+               "view_hash": run.get("view_hash"), "result": run["result"],
+               "files": [{k: f[k] for k in ("item_id", "name", "sha256", "rows")} for f in run["files"]],
+               "diagnosis_before": report["summary"]["category_counts"], "diagnosis_after": None,
+               "attempt": None if attempt is None else {
+                   "number": attempt["number"], "outcome": attempt["outcome"], "error": attempt["error"],
+                   "audit": None if attempt["audit"] is None else json.loads(attempt["audit"])}}
+        if attempt is not None:
+            after = self.guard.safe_join(self.root, attempt["path"], "engine", "after.json")
+            if after.is_file():
+                out["diagnosis_after"] = json.loads(after.read_text(encoding="utf-8"))["summary"]["category_counts"]
+        return out
 
     def _engine_dir(self, run: dict) -> Path:
         """발행된 결과 버전의 시도 폴더(엔진 산출물). 결과 버전이 없으면 결과 없음."""
@@ -571,7 +615,7 @@ class Workspace:
     def download(self, run_id: str, name: str) -> bytes:
         run = self.load(run_id)
         version = publish.latest(self.store, run["db_run"])
-        if version is None or not (FILE_NAME.fullmatch(name) or name == "absent-cells.json"):
+        if version is None or not (FILE_NAME.fullmatch(name) or name in EVIDENCE_FILES):
             raise FlowError("file_not_found", "파일이 없다", 404)
         try:
             return publish.read_verified(self.guard, self.root, version, name)  # 해시 재대조

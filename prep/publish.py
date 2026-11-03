@@ -93,6 +93,19 @@ def write_files(attempt: Attempt, lineage: dict, tables: dict, names: dict[int, 
         body = json.dumps(absent, ensure_ascii=False, indent=2).encode("utf-8")
         (stage / "absent-cells.json").write_bytes(body)
         files["absent-cells.json"] = {"sha256": _sha(body), "rows": len(absent)}
+        # 내부 검토용 근거(FS F07 출력): 변경 내역 JSON(논리 null 구분)·전후 진단·보류 목록, 모두 원본 위치 포함
+        translated = [c for c in loc.translate_changes(changes) if c["table"] not in excluded]
+        extras = {"changes.json": translated}
+        for name, out in (("before.json", "diagnosis-before.json"), ("after.json", "diagnosis-after.json")):
+            extras[out] = loc.translate_report(json.loads((attempt.engine / name).read_text(encoding="utf-8")))
+        held = json.loads((attempt.engine / "held.json").read_text(encoding="utf-8"))
+        extras["held.json"] = [h | {"source": loc.source(h["table"], h["record"], h["columns"])}
+                               if h["table"] in loc.tables else h for h in held]
+        for name, obj in extras.items():
+            body = json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
+            (stage / name).write_bytes(body)
+            rows = len(obj["issues"]) if isinstance(obj, dict) else len(obj)
+            files[name] = {"sha256": _sha(body), "rows": rows}
         manifest = {"files": files, "excluded_tables": excluded, "attempt": attempt.number}
         (stage / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
         for p in stage.iterdir():
@@ -128,8 +141,14 @@ def latest(store: Store, run_id: int) -> dict | None:
 
 
 def read_verified(guard: Guard, root: Path, version: dict, name: str) -> bytes:
-    """발행 파일을 해시 대조 후 돌려준다."""
+    """발행 파일을 해시 대조 후 돌려준다. manifest.json은 적힌 파일 해시가 DB 기록과 같은지로 대조한다."""
     hashes = json.loads(version["data_hashes"])
+    if name == "manifest.json":
+        data = guard.safe_join(root, version["manifest_path"]).read_bytes()
+        listed = {n: m["sha256"] for n, m in json.loads(data)["files"].items()}
+        if listed != hashes:
+            raise PublishError("발행된 manifest가 결과 버전 기록과 다르다")
+        return data
     if name not in hashes:
         raise FileNotFoundError(name)
     folder = guard.safe_join(root, version["manifest_path"]).parent

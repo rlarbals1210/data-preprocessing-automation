@@ -123,10 +123,20 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
     def changes(run_id: str, offset: int = 0, limit: int = 50):
         return ws.changes(run_id, max(offset, 0), min(max(limit, 1), 500))
 
+    @app.get("/api/runs/{run_id}/remaining")
+    def remaining(run_id: str, category: str | None = None, offset: int = 0, limit: int = 50):
+        return ws.remaining(run_id, category, max(offset, 0), min(max(limit, 1), 500))
+
+    @app.get("/api/runs/{run_id}/failure-report")
+    def failure_report(run_id: str):
+        return JSONResponse(ws.failure_report(run_id), headers={
+            "Content-Disposition": f"attachment; filename*=UTF-8''{quote(f'failure-report-{run_id}.json')}"})
+
     @app.get("/api/runs/{run_id}/files/{name}")
     def download(run_id: str, name: str):
         data = ws.download(run_id, name)
-        return Response(data, media_type="text/csv; charset=utf-8",
+        kind = "application/json" if name.endswith(".json") else "text/csv; charset=utf-8"
+        return Response(data, media_type=kind,
                         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
 
     dist = PROJECT_ROOT / "web" / "dist"
