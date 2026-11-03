@@ -90,3 +90,18 @@ def test_held_cells_show_blocking_reasons(client, tmp_path):
     assert body["items"][-1]["held"]  # 보류 셀은 뒤에
     bad = client.put(f"/api/runs/{run['id']}/selection", json={"excluded_cells": [held[0]["cell"]]})
     assert bad.status_code == 400 and "보류" in bad.json()["message"]
+
+
+def test_mapping_change_after_preview_reported_in_run_view(client):
+    """M3-4: 미리보기 뒤 매핑을 바꾸면 실행 상태 이유와 승인 기록에 '매핑 변경'이 남고, 예전 미리보기로는 실행되지 않는다."""
+    run, p = ready(client)
+    files = [{"item_id": f["item_id"], **f["mapping"]} for f in run["files"]]
+    files[0]["columns"]["이메일"] = None
+    assert client.put(f"/api/runs/{run['id']}/mapping", json={"files": files}).status_code == 200
+    view = client.get(f"/api/runs/{run['id']}").json()
+    assert view["status"] == "needs_confirmation" and view["status_reason"] == "mapping_changed"
+    assert [a["invalidated_reason"] for a in view["approvals"] if a["invalidated_at"]] == ["mapping_changed"]
+    stale = client.post(f"/api/runs/{run['id']}/execute", json={"approval": p["approval"]})
+    assert stale.status_code == 409
+    client.post(f"/api/runs/{run['id']}/diagnose")
+    assert client.get(f"/api/runs/{run['id']}").json()["status_reason"] is None

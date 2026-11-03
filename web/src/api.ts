@@ -57,6 +57,8 @@ export type Run = {
   set: string;
   source: string;
   status: RunStatus;
+  status_reason?: string | null;
+  approvals?: Approval[];
   snapshot: string | null;
   files: FileEntry[];
   rows: number;
@@ -65,6 +67,13 @@ export type Run = {
   retried_by?: string | null;
   plan: { skipped: SkippedRule[]; tables: Record<string, TablePlan>; completeness: 'full' | 'partial'; hash: string } | null;
   result: ResultSummary | null;
+};
+export type Approval = {
+  id: number;
+  kind: 'structure' | 'execution';
+  created_at: string;
+  invalidated_at: string | null;
+  invalidated_reason: string | null;
 };
 export type RunListItem = Pick<Run, 'id' | 'created_at' | 'set' | 'source' | 'status' | 'rows' | 'result' | 'retry_of' | 'retried_by'> & { file_count: number };
 export type SkippedRule = { table: string; kind: string; columns: string[]; target?: string; reason: string };

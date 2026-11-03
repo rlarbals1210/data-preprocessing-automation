@@ -162,3 +162,13 @@ def test_approval_rows_append_only(env):
             c.execute(f"UPDATE {table} SET hash = hash")
     kinds = [e["kind"] for e in store.events("run", run)]
     assert "approval_invalidated" in kinds
+
+
+def test_same_targets_do_not_report_targets_changed(env):
+    """M3-4: 같은 실행 대상을 다시 확정하면 무효화 이유는 매핑 단계가 정한다(화면에 정확한 이유를 보이기 위해)."""
+    _, led, run, items = env
+    prepare(led, run, items)
+    led.set_targets(run, [{"upload_item_id": i, "included": True} for i in items])
+    led.record_mapping(run, {"auto": 1}, {items[0]: {"table": "t", "columns": {"x": None}}})
+    reasons = [a["invalidated_reason"] for a in led.approvals(run) if a["invalidated_at"]]
+    assert "targets_changed" not in reasons and "mapping_changed" in reasons

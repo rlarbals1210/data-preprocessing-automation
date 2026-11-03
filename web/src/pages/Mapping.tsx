@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Card, Group, Select, SimpleGrid, Stack, Table, Text, Tooltip } from '@mantine/core';
+import { Alert, Badge, Button, Card, Group, Modal, Select, SimpleGrid, Stack, Table, Text, Tooltip } from '@mantine/core';
 import { IconArrowRight, IconCheck } from '@tabler/icons-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
@@ -23,6 +23,7 @@ export default function Mapping({ run }: { run: Run }) {
     [run],
   );
   const [drafts, setDrafts] = useState(initial);
+  const [warn, setWarn] = useState(false);
   const readable = run.files.filter((f) => !f.read_error);
   const dirty = readable.some((f) => !same({ table: drafts[f.item_id].table, columns: drafts[f.item_id].columns }, f.mapping));
   const allConfirmed = run.files.every((f) => f.confirmed);
@@ -57,8 +58,13 @@ export default function Mapping({ run }: { run: Run }) {
         run.id,
         readable.map((f) => ({ item_id: f.item_id, table: drafts[f.item_id].table, columns: drafts[f.item_id].columns })),
       ),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      setWarn(false);
+      invalidate();
+    },
   });
+  // 진단·미리보기 뒤 매핑을 바꾸면 그 진단·선택·승인이 무효가 된다(AC-03-5) — 확정 전에 알린다
+  const willInvalidate = dirty && ['diagnosed', 'awaiting_approval'].includes(run.status);
   const diagnose = useMutation({
     mutationFn: () => api.diagnose(run.id),
     onSuccess: () => {
@@ -111,7 +117,7 @@ export default function Mapping({ run }: { run: Run }) {
               leftSection={<IconCheck size={16} />}
               disabled={finished || blocking || (!dirty && allConfirmed)}
               loading={confirm.isPending}
-              onClick={() => confirm.mutate()}
+              onClick={() => (willInvalidate ? setWarn(true) : confirm.mutate())}
             >
               매핑 확정
             </Button>
@@ -126,6 +132,19 @@ export default function Mapping({ run }: { run: Run }) {
           </Button>
         </Group>
       </Group>
+      <Modal opened={warn} onClose={() => setWarn(false)} title="매핑 변경" centered>
+        <Stack>
+          <Text fz="sm">확정하면 지금의 진단과 미리보기 선택이 무효가 되고, 다시 진단해야 합니다.</Text>
+          <Group justify="flex-end">
+            <Button variant="default" onClick={() => setWarn(false)}>
+              취소
+            </Button>
+            <Button color="orange" loading={confirm.isPending} onClick={() => confirm.mutate()}>
+              확정
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
       {(confirm.error || diagnose.error) && (
         <Alert color="red">{((confirm.error || diagnose.error) as Error).message}</Alert>
       )}

@@ -102,3 +102,29 @@ export const TABLE_BASIS: Record<string, string> = { name: '이름 일치', head
 
 export const where = (s?: { file: string | null; record: number; line_start: number; line_end: number } | null) =>
   !s ? '' : `${s.file ?? ''} ${s.record}행 · ${s.line_start === s.line_end ? `${s.line_start}줄` : `${s.line_start}–${s.line_end}줄`}`;
+
+export const APPROVAL_KIND: Record<string, string> = { structure: '구조 승인', execution: '실행 승인' };
+const HASH_LABEL: Record<string, string> = {
+  config_hash: '설정',
+  input_hash: '실행 대상',
+  mapping_hash: '매핑',
+  plan_hash: '실행 계획',
+  view_hash: '표준화 뷰',
+  candidate_hash: '표준화 후보',
+  apply_hash: '적용 선택',
+};
+const INVALIDATED: Record<string, string> = {
+  targets_changed: '실행 대상 변경',
+  mapping_changed: '매핑 변경',
+  mapping_reconfirmed: '매핑 재확정',
+  plan_regenerated: '실행 계획 재생성',
+  view_regenerated: '다시 진단',
+  selection_changed: '적용 선택 변경',
+  superseded: '새 승인으로 대체',
+};
+export const invalidated = (reason: string | null) => {
+  if (!reason) return '';
+  if (reason.startsWith('hash_mismatch:'))
+    return `승인 때와 다름: ${reason.slice(14).split(',').map((k) => HASH_LABEL[k] ?? k).join(', ')}`;
+  return INVALIDATED[reason] ?? reason;
+};

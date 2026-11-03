@@ -1,9 +1,9 @@
-import { Anchor, Badge, Group, Loader, Stepper, Text, Title } from '@mantine/core';
-import { IconCheck, IconMinus } from '@tabler/icons-react';
+import { Alert, Anchor, Badge, Button, Group, Loader, Popover, Stepper, Table, Text, Title } from '@mantine/core';
+import { IconAlertTriangle, IconCheck, IconMinus } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { FINISHED, api, type Run } from '../api';
-import { RUN_STATUS, SET_LABEL, when } from '../labels';
+import { APPROVAL_KIND, RUN_STATUS, SET_LABEL, invalidated, when } from '../labels';
 import Diagnosis from './Diagnosis';
 import Mapping from './Mapping';
 import Preview from './Preview';
@@ -56,10 +56,49 @@ export default function RunPage() {
             </Anchor>
           )}
         </Group>
-        <Text c="dimmed" fz="sm">
-          {r.source} · {SET_LABEL[r.set]} · {when(r.created_at)}
-        </Text>
+        <Group gap="sm">
+          <Text c="dimmed" fz="sm">
+            {r.source} · {SET_LABEL[r.set]} · {when(r.created_at)}
+          </Text>
+          {!!r.approvals?.length && (
+            <Popover position="bottom-end" shadow="md" width={420}>
+              <Popover.Target>
+                <Button size="compact-xs" variant="subtle" color="gray">
+                  승인 기록 {r.approvals.length}
+                </Button>
+              </Popover.Target>
+              <Popover.Dropdown>
+                <Table fz="xs" data-testid="approvals">
+                  <Table.Tbody>
+                    {r.approvals.map((a) => (
+                      <Table.Tr key={a.id}>
+                        <Table.Td>{APPROVAL_KIND[a.kind] ?? a.kind}</Table.Td>
+                        <Table.Td c="dimmed">{when(a.created_at)}</Table.Td>
+                        <Table.Td>
+                          {a.invalidated_at ? (
+                            <Badge size="xs" color="gray" variant="light">
+                              무효 · {invalidated(a.invalidated_reason)}
+                            </Badge>
+                          ) : (
+                            <Badge size="xs" color="teal" variant="light">
+                              유효
+                            </Badge>
+                          )}
+                        </Table.Td>
+                      </Table.Tr>
+                    ))}
+                  </Table.Tbody>
+                </Table>
+              </Popover.Dropdown>
+            </Popover>
+          )}
+        </Group>
       </Group>
+      {r.status === 'needs_confirmation' && r.status_reason === 'mapping_changed' && (
+        <Alert color="orange" icon={<IconAlertTriangle size={18} />} mb="md" data-testid="invalidated">
+          매핑이 바뀌어 이전 진단·미리보기·승인이 무효가 됐습니다. 다시 진단하세요.
+        </Alert>
+      )}
       <Stepper
         active={active === -1 ? 0 : active}
         size="xs"

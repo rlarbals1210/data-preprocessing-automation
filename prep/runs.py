@@ -47,8 +47,10 @@ class RunLedger:
 
     def set_targets(self, run_id: int, targets: list[dict]) -> None:
         with self.store.tx():
+            before = self.input_hash(run_id)
             self.store.set_targets(run_id, targets)
-            self._invalidate(run_id, ("structure", "execution"), "targets_changed")
+            if self.input_hash(run_id) != before:  # 실제로 바뀐 경우만(같은 대상 재확정은 매핑 단계가 판단)
+                self._invalidate(run_id, ("structure", "execution"), "targets_changed")
 
     def input_hash(self, run_id: int) -> str | None:
         """실행 대상(업로드 항목 ID, 원본 해시, 시트, 읽기 조건)을 순서대로."""

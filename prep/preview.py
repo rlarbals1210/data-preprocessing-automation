@@ -71,7 +71,8 @@ class Workspace:
         run = json.loads((self.run_dir(run_id) / "run.json").read_text(encoding="utf-8"))
         if "db_run" not in run:
             raise FlowError("legacy_run", "실행 기록(M1-10a) 이전에 만든 실행이다. 새로 업로드하세요", 410)
-        run["status"] = self.store.run(run["db_run"])["status"]  # 상태 정본은 DB
+        db = self.store.run(run["db_run"])
+        run["status"], run["status_reason"] = db["status"], db["status_reason"]  # 상태 정본은 DB
         return run
 
     def _transition(self, run: dict, to: str, reason: str | None = None) -> None:
@@ -110,7 +111,7 @@ class Workspace:
     def save(self, run: dict) -> None:
         path = self.guard.safe_join(self.runs, run["id"], "run.json")
         tmp = path.with_suffix(".tmp")
-        body = {k: v for k, v in run.items() if k not in ("status", "catalog", "approvals")}
+        body = {k: v for k, v in run.items() if k not in ("status", "status_reason", "catalog", "approvals")}
         tmp.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
         tmp.replace(path)
 
