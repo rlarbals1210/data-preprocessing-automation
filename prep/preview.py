@@ -20,7 +20,7 @@ from pathlib import Path
 from diagnostics.engine import diagnose, read_table
 from prep import attempt as attempts
 from prep import publish
-from prep.apply import ApplyError, build_apply_plan, verify_plan
+from prep.apply import ApplyError, build_apply_plan, group_id, verify_plan
 from prep.apply import candidates as apply_candidates
 from prep.apply import groups as apply_groups
 from prep.guard import Guard
@@ -390,10 +390,49 @@ class Workspace:
         if run["status"] == "diagnosed":
             self._transition(run, "awaiting_approval")
         approved = set(plan["approved_groups"])
-        out = [g | {"approved": g["id"] in approved} for g in apply_groups(cells, held)]
+        excluded = {tuple(k) for k in plan["excluded_cells"]}
+        out = []
+        for g in apply_groups(cells, held):
+            n = sum(1 for k in excluded if k in cells and g["code"] in cells[k]["codes"]
+                    and group_id(k[0], k[2], g["code"]) == g["id"])
+            out.append(g | {"approved": g["id"] in approved, "excluded": n})
+        tables = (run.get("plan") or {}).get("tables", {})
         return {"groups": out, "total_cells": plan["counts"]["allowed"], "candidates": plan["counts"]["candidates"],
-                "held": plan["counts"]["held"], "plan_hash": plan["hash"], "view_hash": plan["view_hash"],
+                "held": plan["counts"]["held"], "not_approved": plan["counts"]["not_approved"],
+                "excluded_cells": plan["excluded_cells"], "plan_hash": plan["hash"], "view_hash": plan["view_hash"],
+                "not_publishable": {t: v["reason"] for t, v in sorted(tables.items()) if not v["publishable"]},
                 "approval": self.ledger.current_hashes(run["db_run"])}
+
+    def preview_cells(self, run_id: str, gid: str, offset: int, limit: int) -> dict:
+        """묶음 하나의 셀 목록(SC07): 원본 위치·전후 값·제외 여부, 보류 셀은 막는 위반·검토(AC-06-2)."""
+        report = self._report(run_id)
+        cells, held = apply_candidates(report)
+        plan = self._plan(run_id)
+        excluded = {tuple(k) for k in plan["excluded_cells"]}
+        names = {f["item_id"]: f["name"] for f in self.load(run_id)["files"]}
+        rows = []
+        for bucket, is_held in ((cells, False), (held, True)):
+            for key, v in bucket.items():
+                if any(group_id(key[0], key[2], c) == gid for c in v["codes"]):
+                    rows.append((key, v, is_held))
+        if not rows:
+            raise FlowError("group_not_found", "현재 후보에 없는 규칙 묶음이다", 404)
+        rows.sort(key=lambda r: (r[2], r[0][1]))
+        blocking = defaultdict(list)
+        if any(r[2] for r in rows):
+            for i in report["issues"]:
+                if i["category"] in ("business_rule_violation", "human_review") and i["code"] != "duplicate_row":
+                    for c in i["columns"]:
+                        blocking[(i["table"], i["record"], c)].append({"category": i["category"], "code": i["code"]})
+        items = []
+        for key, v, is_held in rows[offset: offset + limit]:
+            source = v.get("source") or {}
+            items.append({"cell": list(key), "before": v["before"], "after": "" if v["after"] is None else v["after"],
+                          "null": v["after"] is None, "codes": v["codes"],
+                          "source": source | {"file": names.get(source.get("item_id"))} if source else None,
+                          "held": is_held, "excluded": key in excluded,
+                          "reasons": blocking.get(key, []) if is_held else []})
+        return {"total": len(rows), "held": sum(1 for r in rows if r[2]), "items": items}
 
     def select(self, run_id: str, selection: dict) -> dict:
         """사용자 선택 → 서버가 검증한 적용 계획(T-08)."""

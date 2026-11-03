@@ -95,6 +95,10 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
     def preview(run_id: str):
         return ws.changes_preview(run_id)
 
+    @app.get("/api/runs/{run_id}/preview/groups/{gid}")
+    def preview_cells(run_id: str, gid: str, offset: int = 0, limit: int = 50):
+        return ws.preview_cells(run_id, gid, max(offset, 0), min(max(limit, 1), 500))
+
     @app.put("/api/runs/{run_id}/selection")
     def select(run_id: str, body: Annotated[dict, Body()]):
         return ws.select(run_id, body)

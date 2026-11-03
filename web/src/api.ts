@@ -114,13 +114,18 @@ export type PreviewGroup = {
   column: string;
   code: string;
   cells: number;
+  excluded: number;
   examples: { before: string; after: string }[];
 };
+export type Cell = [string, number, string];
 export type PreviewData = {
   groups: PreviewGroup[];
   total_cells: number;
   candidates: number;
   held: number;
+  not_approved: number;
+  excluded_cells: Cell[];
+  not_publishable: Record<string, string>;
   plan_hash: string;
   view_hash: string;
   approval: Record<string, string | null>;
@@ -135,6 +140,17 @@ export type Change = {
   source: Source;
 };
 export type Page<T> = { total: number; items: T[] };
+export type GroupCell = {
+  cell: Cell;
+  before: string;
+  after: string;
+  null: boolean;
+  codes: string[];
+  source: Source | null;
+  held: boolean;
+  excluded: boolean;
+  reasons: { category: Category; code: string }[];
+};
 
 export class ApiError extends Error {
   code: string;
@@ -187,11 +203,13 @@ export const api = {
   issues: (id: string, p: { category?: string; table?: string | null; offset: number; limit: number }) =>
     req<Page<Issue>>(`/runs/${id}/issues${q(p)}`),
   preview: (id: string) => req<PreviewData>(`/runs/${id}/preview`),
-  select: (id: string, approved_groups: string[]) =>
+  previewCells: (id: string, gid: string, offset: number, limit: number) =>
+    req<Page<GroupCell> & { held: number }>(`/runs/${id}/preview/groups/${encodeURIComponent(gid)}${q({ offset, limit })}`),
+  select: (id: string, approved_groups: string[], excluded_cells: Cell[]) =>
     req<PreviewData>(`/runs/${id}/selection`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ approved_groups }),
+      body: JSON.stringify({ approved_groups, excluded_cells }),
     }),
   execute: (id: string, approval: Record<string, string | null>) =>
     req<ResultSummary>(`/runs/${id}/execute`, {
