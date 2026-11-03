@@ -256,10 +256,10 @@ def markdown(head: dict, report: dict, digest: str) -> str:
         if not rows:
             out.extend(["(사례 없음)", ""])
             return
-        cols = list(rows[0])
+        cols = list(dict.fromkeys(c for r in rows for c in r))  # 행마다 다른 열(예: 유실)도 모두 표시
         out.append("| " + " | ".join(cols) + " |")
         out.append("|" + "---|" * len(cols))
-        out.extend("| " + " | ".join("—" if r[c] is None else str(r[c]) for c in cols) + " |" for r in rows)
+        out.extend("| " + " | ".join("—" if r.get(c) is None else str(r[c]) for c in cols) + " |" for r in rows)
         out.append("")
 
     m = report["map_column"]

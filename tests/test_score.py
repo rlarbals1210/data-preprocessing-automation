@@ -136,6 +136,7 @@ def test_report_files_and_markdown(env):
     assert head["안내"].startswith("합성 벤치마크") and head["설정 스냅샷"]
     md = (env["tmp"] / "score" / "score.md").read_text(encoding="utf-8")
     assert "합성 벤치마크" in md and "셀 표준화 (normalize)" in md and "R02" in md
+    assert "| 범주 | 건수 | 분모 | 유실 |" in md  # 그 밖의 셀 변경의 유실 열도 표에 나온다
 
 
 def test_evaluation_split_needs_confirm_final(env, capsys):
