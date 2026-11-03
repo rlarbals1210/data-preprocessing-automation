@@ -120,7 +120,8 @@ class Workspace:
                 if "db_run" not in r:
                     continue  # 실행 기록 이전 실행은 목록에서 뺀다
                 r["status"] = self.store.run(r["db_run"])["status"]
-                items.append({k: r.get(k) for k in ("id", "created_at", "set", "source", "status", "rows", "result")}
+                items.append({k: r.get(k) for k in ("id", "created_at", "set", "source", "status", "rows", "result",
+                                                    "retry_of", "retried_by")}
                              | {"file_count": len(r["files"])})
         return items
 
@@ -179,6 +180,38 @@ class Workspace:
         self.ledger.record_mapping(run["db_run"],
                                    {str(f["item_id"]): f["proposal"] for f in run["files"] if f["proposal"]},
                                    {str(f["item_id"]): f["mapping"] for f in run["files"]})
+
+    # ---- 재시도 (M1-10d) ----
+    def retry(self, run_id: str) -> dict:
+        """실패한 실행을 같은 업로드 묶음으로 새 실행으로 다시 시도한다(FS 6절). 실패 기록은 그대로 둔다.
+        설정은 지금의 스냅샷을 새로 쓰고, 매핑은 이전 확정 매핑을 초안으로 가져와 다시 확정받는다."""
+        old = self.load(run_id)
+        if old["status"] != "failed":
+            raise FlowError("not_failed", "실패한 실행만 다시 시도할 수 있다", 409)
+        shop = create_snapshot(PROJECT_ROOT, "shop", self.root, self.guard)
+        snap_id = self.store.add_config_snapshot(shop.hash, "shop", f"config-snapshots/{shop.hash}", list(shop.files))
+        db_run = self.ledger.start(old["batch_id"], snap_id, retry_of=old["db_run"])
+        now = datetime.now(UTC)
+        new_id = now.strftime("%Y%m%dT%H%M%SZ") + "-" + secrets.token_hex(3)
+        self.guard.safe_join(self.runs, new_id).mkdir()
+        files = []
+        for f in old["files"]:
+            g = json.loads(json.dumps(f))
+            g["confirmed"] = bool(f["read_error"]) or old["snapshot"] is None
+            files.append(g)
+        run = {"id": new_id, "created_at": now.isoformat(), "set": old["set"], "source": old["source"],
+               "batch_id": old["batch_id"], "db_run": db_run, "status": "uploaded",
+               "snapshot": shop.hash if old["snapshot"] else None, "config_hash": shop.hash, "files": files,
+               "rows": old["rows"], "plan": None, "result": None, "retry_of": old["id"]}
+        if run["snapshot"] is None:
+            self._record_structure(run)
+        else:
+            self._transition(run, "needs_confirmation", "retry")
+        self.store.record_event("run", old["db_run"], "retried", {"new_run": db_run})
+        self.save(run)
+        old["retried_by"] = new_id
+        self.save(old)
+        return self.view(new_id)
 
     # ---- 매핑 (M1-5) ----
     def propose_table(self, run_id: str, item_id: int, table: str) -> dict:

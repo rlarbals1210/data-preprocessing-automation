@@ -1,7 +1,7 @@
-import { Badge, Group, Loader, Stepper, Text, Title } from '@mantine/core';
+import { Anchor, Badge, Group, Loader, Stepper, Text, Title } from '@mantine/core';
 import { IconCheck, IconMinus } from '@tabler/icons-react';
 import { useQuery } from '@tanstack/react-query';
-import { Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { FINISHED, api, type Run } from '../api';
 import { RUN_STATUS, SET_LABEL, when } from '../labels';
 import Diagnosis from './Diagnosis';
@@ -50,6 +50,11 @@ export default function RunPage() {
           <Badge variant="light" color={RUN_STATUS[r.status]?.color}>
             {RUN_STATUS[r.status]?.label}
           </Badge>
+          {r.retry_of && (
+            <Anchor component={Link} to={`/runs/${r.retry_of}`} fz="sm" c="dimmed">
+              ← 재시도 원본
+            </Anchor>
+          )}
         </Group>
         <Text c="dimmed" fz="sm">
           {r.source} · {SET_LABEL[r.set]} · {when(r.created_at)}

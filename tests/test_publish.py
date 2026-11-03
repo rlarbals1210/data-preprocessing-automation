@@ -131,3 +131,38 @@ def test_empty_selection_still_publishes(client):
     p = client.put(f"/api/runs/{run['id']}/selection", json={"approved_groups": []}).json()
     res = client.post(f"/api/runs/{run['id']}/execute", json={"approval": p["approval"]}).json()
     assert res["changed_cells"] == 0 and res["result_version"]
+
+
+def test_retry_failed_run(client, tmp_path, monkeypatch):
+    """M1-10d: 실패한 실행은 같은 묶음의 새 실행으로 다시 시도하고, 실패 기록은 남는다."""
+    def boom(*a, **k):
+        raise OSError("디스크 가득 참 흉내")
+    with monkeypatch.context() as m:
+        m.setattr(publish, "write_files", boom)
+        run, res = flow(client, [dev("categories.csv")])
+    assert res["status"] == "failed"
+    new = client.post(f"/api/runs/{run['id']}/retry").json()
+    assert new["retry_of"] == run["id"] and new["status"] == "needs_confirmation"
+    assert new["files"][0]["mapping"] == run["files"][0]["mapping"] and not new["files"][0]["confirmed"]
+    old = client.get(f"/api/runs/{run['id']}").json()
+    assert old["status"] == "failed" and old["retried_by"] == new["id"]
+    # 새 실행은 처음부터 다시 승인받아 끝까지 간다
+    maps = [{"item_id": f["item_id"], **f["mapping"]} for f in new["files"]]
+    client.put(f"/api/runs/{new['id']}/mapping", json={"files": maps})
+    client.post(f"/api/runs/{new['id']}/diagnose")
+    p = client.get(f"/api/runs/{new['id']}/preview").json()
+    done = client.post(f"/api/runs/{new['id']}/execute", json={"approval": p["approval"]}).json()
+    assert done["status"] in ("completed", "completed_with_issues") and done["result_version"]
+    c = db(tmp_path)
+    runs = c.execute("SELECT id, retry_of, status, batch_id FROM run ORDER BY id").fetchall()
+    assert [r["status"] for r in runs] == ["failed", done["status"]]
+    assert runs[1]["retry_of"] == runs[0]["id"] and runs[1]["batch_id"] == runs[0]["batch_id"]
+    assert c.execute("SELECT outcome FROM attempt ORDER BY id").fetchall()[0][0] == "publish_failed"
+    listed = {r["id"]: r for r in client.get("/api/runs").json()}
+    assert listed[new["id"]]["retry_of"] == run["id"]
+
+
+def test_retry_only_failed(client):
+    run, res = flow(client, [dev("categories.csv")])
+    r = client.post(f"/api/runs/{run['id']}/retry")
+    assert r.status_code == 409 and r.json()["code"] == "not_failed"

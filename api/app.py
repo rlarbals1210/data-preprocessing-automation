@@ -63,6 +63,10 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
     def run(run_id: str):
         return ws.view(run_id)
 
+    @app.post("/api/runs/{run_id}/retry")
+    def retry(run_id: str):
+        return ws.retry(run_id)
+
     @app.post("/api/runs/{run_id}/propose")
     def propose(run_id: str, body: Annotated[dict, Body()]):
         return ws.propose_table(run_id, int(body.get("item_id", 0)), str(body.get("table", "")))

@@ -61,10 +61,12 @@ export type Run = {
   files: FileEntry[];
   rows: number;
   catalog?: Catalog | null;
+  retry_of?: string | null;
+  retried_by?: string | null;
   plan: { skipped: SkippedRule[]; tables: Record<string, TablePlan>; completeness: 'full' | 'partial'; hash: string } | null;
   result: ResultSummary | null;
 };
-export type RunListItem = Pick<Run, 'id' | 'created_at' | 'set' | 'source' | 'status' | 'rows' | 'result'> & { file_count: number };
+export type RunListItem = Pick<Run, 'id' | 'created_at' | 'set' | 'source' | 'status' | 'rows' | 'result' | 'retry_of' | 'retried_by'> & { file_count: number };
 export type SkippedRule = { table: string; kind: string; columns: string[]; target?: string; reason: string };
 export type TablePlan = { diagnosable: boolean; publishable: boolean; missing_required: string[]; reason: string | null };
 export type Category = 'normal_observation' | 'standardization_candidate' | 'business_rule_violation' | 'human_review';
@@ -167,6 +169,7 @@ export const api = {
     return req<Run>('/runs', { method: 'POST', body: form });
   },
   run: (id: string) => req<Run>(`/runs/${id}`),
+  retry: (id: string) => req<Run>(`/runs/${id}/retry`, { method: 'POST' }),
   propose: (id: string, item_id: number, table: string) =>
     req<Proposal>(`/runs/${id}/propose`, {
       method: 'POST',

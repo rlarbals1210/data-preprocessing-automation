@@ -1,6 +1,7 @@
-import { Alert, Anchor, Badge, Card, Code, Group, Loader, Pagination, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
-import { IconArrowRight, IconDownload } from '@tabler/icons-react';
-import { useQuery } from '@tanstack/react-query';
+import { Alert, Anchor, Badge, Button, Card, Code, Group, Loader, Pagination, SimpleGrid, Stack, Table, Text, Title } from '@mantine/core';
+import { IconArrowRight, IconDownload, IconRefresh } from '@tabler/icons-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Link, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { api, type Run } from '../api';
 import { CATEGORY, CATEGORY_ORDER, CHANGE, CODE, PUBLISH_REASON, RESULT_STATUS, fmt, where } from '../labels';
@@ -10,6 +11,16 @@ const PAGE = 25;
 export default function Result({ run }: { run: Run }) {
   const r = useQuery({ queryKey: ['result', run.id], queryFn: () => api.result(run.id) });
   const [page, setPage] = useState(1);
+  const qc = useQueryClient();
+  const nav = useNavigate();
+  const retry = useMutation({
+    mutationFn: () => api.retry(run.id),
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['runs'] });
+      qc.invalidateQueries({ queryKey: ['run', run.id] });
+      nav(`/runs/${r.id}/mapping`);
+    },
+  });
   const changes = useQuery({
     queryKey: ['changes', run.id, page],
     queryFn: () => api.changes(run.id, (page - 1) * PAGE, PAGE),
@@ -42,7 +53,21 @@ export default function Result({ run }: { run: Run }) {
         )}
       </Group>
       {x.status === 'failed' ? (
-        <Alert color="red">{x.error}</Alert>
+        <Stack>
+          <Alert color="red">{x.error}</Alert>
+          <Group>
+            {run.retried_by ? (
+              <Button component={Link} to={`/runs/${run.retried_by}`} variant="light" rightSection={<IconArrowRight size={16} />}>
+                다시 시도한 실행
+              </Button>
+            ) : (
+              <Button leftSection={<IconRefresh size={16} />} loading={retry.isPending} onClick={() => retry.mutate()}>
+                다시 시도
+              </Button>
+            )}
+          </Group>
+          {retry.error && <Alert color="red">{(retry.error as Error).message}</Alert>}
+        </Stack>
       ) : (
         <>
           <SimpleGrid cols={{ base: 2, md: 4 }}>

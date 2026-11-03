@@ -44,6 +44,11 @@ export default function Home() {
                 <Table.Tr key={r.id} style={{ cursor: 'pointer' }} onClick={() => nav(`/runs/${r.id}`)}>
                   <Table.Td ff="monospace" fz="sm">
                     {r.id}
+                    {r.retry_of && (
+                      <Badge ml={6} size="xs" variant="outline" color="gray">
+                        재시도
+                      </Badge>
+                    )}
                   </Table.Td>
                   <Table.Td>{when(r.created_at)}</Table.Td>
                   <Table.Td>{r.source}</Table.Td>
