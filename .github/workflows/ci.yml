@@ -39,3 +39,25 @@ jobs:
         run: npm ci
       - name: 타입 검사·빌드
         run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+      - name: Python 의존성
+        run: uv sync --locked
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: 화면 의존성·브라우저
+        working-directory: web
+        run: npm ci && npx playwright install --with-deps chromium
+      - name: 빌드
+        working-directory: web
+        run: npm run build
+      - name: S1 E2E (개발 입력만)
+        working-directory: web
+        run: npm run e2e

@@ -1,4 +1,4 @@
-.PHONY: sync test lint paths check hooks web serve dev score-dev
+.PHONY: sync test lint paths check hooks web serve dev score-dev e2e
 
 # 테스트는 반드시 tests 경로를 지정한다(scripts/test_*.py 수집 금지, 개발 계획 3절).
 sync:
@@ -32,3 +32,8 @@ dev:
 # 개발셋 13개를 서비스 흐름으로 처리해 채점한다(M2-4). 개발 정답은 채점기만 읽는다. 평가 분할은 쓰지 않는다.
 score-dev:
 	uv run python -m tools.score_dev
+
+# S1 화면 E2E(M3-5): 화면을 빌드하고 임시 workspace로 서버(8765번)를 띄워 Playwright로 확인한다.
+# 처음 한 번은 브라우저 설치가 필요하다: cd web && npx playwright install chromium
+e2e:
+	cd web && npm run build && npm run e2e

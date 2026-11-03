@@ -30,3 +30,5 @@ reports/
 
 # 웹 빌드 결과
 web/dist/
+web/test-results/
+web/playwright-report/
