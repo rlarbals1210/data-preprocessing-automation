@@ -140,6 +140,25 @@ export type Change = {
   source: Source;
 };
 export type Page<T> = { total: number; items: T[] };
+export type SourceRow = {
+  file: string;
+  item_id: number;
+  record: number;
+  line_start: number;
+  line_end: number;
+  cells: { original: string; logical: string | null; value: string }[];
+};
+export type DuplicateGroup = {
+  id: string;
+  table: string;
+  code: string;
+  kind: 'identical' | 'conflicting';
+  columns: string[];
+  differing_columns: string[];
+  records: number[];
+  participant_count: number;
+  sources: Source[];
+};
 export type GroupCell = {
   cell: Cell;
   before: string;
@@ -202,6 +221,10 @@ export const api = {
   diagnosis: (id: string) => req<Diagnosis>(`/runs/${id}/diagnosis`),
   issues: (id: string, p: { category?: string; table?: string | null; offset: number; limit: number }) =>
     req<Page<Issue>>(`/runs/${id}/issues${q(p)}`),
+  duplicates: (id: string, offset: number, limit: number) =>
+    req<Page<DuplicateGroup>>(`/runs/${id}/duplicates${q({ offset, limit })}`),
+  sourceRow: (id: string, item_id: number, record: number) =>
+    req<SourceRow>(`/runs/${id}/source${q({ item_id, record })}`),
   preview: (id: string) => req<PreviewData>(`/runs/${id}/preview`),
   previewCells: (id: string, gid: string, offset: number, limit: number) =>
     req<Page<GroupCell> & { held: number }>(`/runs/${id}/preview/groups/${encodeURIComponent(gid)}${q({ offset, limit })}`),

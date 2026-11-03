@@ -366,6 +366,35 @@ class Workspace:
             out.append(item)
         return {"total": len(items), "items": out}
 
+    def duplicates(self, run_id: str, offset: int, limit: int) -> dict:
+        """중복 그룹(SC05): 동일 행·키 충돌과 참여 행의 원본 위치."""
+        groups = self._report(run_id)["duplicate_groups"]
+        names = {f["item_id"]: f["name"] for f in self.load(run_id)["files"]}
+        out = []
+        for g in groups[offset: offset + limit]:
+            out.append({k: g.get(k) for k in ("id", "table", "code", "kind", "columns", "differing_columns",
+                                              "records", "participant_count")}
+                       | {"sources": [s | {"file": names.get(s["item_id"])} for s in g.get("sources", [])]})
+        return {"total": len(groups), "items": out}
+
+    def source_row(self, run_id: str, item_id: int, record: int) -> dict:
+        """원본 위치의 원문 행(AC-04-4): 보관 원본(해시 대조)을 다시 읽어 원래 헤더·값·물리 줄을 돌려준다."""
+        run = self.load(run_id)
+        f = next((f for f in run["files"] if f["item_id"] == item_id), None)
+        if f is None or f["read_error"]:
+            raise FlowError("source_not_found", "원본 파일이 없다", 404)
+        self.blobs.get(f["sha256"])
+        table = read_table(self.blobs.path(f["sha256"]), f["read_options"]["encoding"],
+                           f["read_options"]["delimiter"])
+        if not 1 <= record <= len(table["rows"]):
+            raise FlowError("source_not_found", "원본에 없는 레코드다", 404)
+        row = table["rows"][record - 1]
+        mapping = (f.get("mapping") or {}).get("columns") or {}
+        return {"file": f["name"], "item_id": item_id, "record": record, "line_start": row["line_start"],
+                "line_end": row["line_end"],
+                "cells": [{"original": h, "logical": mapping.get(h), "value": row["values"][h]}
+                          for h in table["headers"]]}
+
     def _plan(self, run_id: str) -> dict:
         """저장된 적용 계획(없으면 전체 승인 기본값을 만들어 DB에 기록). M1-9·M1-10a."""
         run, report = self.load(run_id), self._report(run_id)

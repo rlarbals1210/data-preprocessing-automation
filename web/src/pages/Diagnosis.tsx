@@ -20,6 +20,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, type Category, type Run, type SkippedRule } from '../api';
+import { SourceButton } from '../components/SourceRow';
 import { CATEGORY, CATEGORY_ORDER, CODE, PUBLISH_REASON, RULE_KIND, SKIP_REASON, fmt, where } from '../labels';
 
 const PAGE = 25;
@@ -45,6 +46,70 @@ function Stat({ label, value, color }: { label: string; value: number | string; 
       <Text fz={26} fw={700} c={color}>
         {typeof value === 'number' ? fmt(value) : value}
       </Text>
+    </Card>
+  );
+}
+
+const DUP_PAGE = 10;
+const DUP_KIND: Record<string, string> = { identical: '동일 행', conflicting: '값이 다른 행' };
+
+function Duplicates({ run }: { run: Run }) {
+  const [page, setPage] = useState(1);
+  const d = useQuery({
+    queryKey: ['duplicates', run.id, page],
+    queryFn: () => api.duplicates(run.id, (page - 1) * DUP_PAGE, DUP_PAGE),
+  });
+  return (
+    <Card withBorder>
+      <Title order={5} mb="xs">
+        중복 그룹 {d.data && <Text span c="dimmed">{fmt(d.data.total)}</Text>}
+      </Title>
+      <Table fz="sm" verticalSpacing={6}>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>테이블</Table.Th>
+            <Table.Th>구분</Table.Th>
+            <Table.Th>기준 컬럼</Table.Th>
+            <Table.Th>참여 행</Table.Th>
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {d.data?.items.map((g) => (
+            <Table.Tr key={g.id} data-testid="duplicate-group">
+              <Table.Td ff="monospace">{g.table}</Table.Td>
+              <Table.Td>
+                <Badge variant="light" color={g.code === 'unique' ? 'red' : 'orange'}>
+                  {g.code === 'unique' ? '키 중복' : '행 중복'} · {DUP_KIND[g.kind] ?? g.kind}
+                </Badge>
+              </Table.Td>
+              <Table.Td ff="monospace">
+                {g.columns.length > 3 ? `${g.columns.length}개 컬럼` : g.columns.join(', ')}
+                {g.differing_columns.length > 0 && (
+                  <Text span c="dimmed" fz="xs">
+                    {' '}
+                    (다른 값: {g.differing_columns.join(', ')})
+                  </Text>
+                )}
+              </Table.Td>
+              <Table.Td>
+                <Stack gap={2}>
+                  {g.sources.map((s) => (
+                    <Group key={`${s.item_id}-${s.record}`} gap={4} wrap="nowrap" c="dimmed">
+                      {where(s)}
+                      <SourceButton runId={run.id} source={s} />
+                    </Group>
+                  ))}
+                </Stack>
+              </Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+      {(d.data?.total ?? 0) > DUP_PAGE && (
+        <Group justify="center" mt="sm">
+          <Pagination size="sm" total={Math.ceil((d.data?.total ?? 0) / DUP_PAGE)} value={page} onChange={setPage} />
+        </Group>
+      )}
     </Card>
   );
 }
@@ -169,6 +234,8 @@ export default function Diagnosis({ run }: { run: Run }) {
         </Table>
       </Card>
 
+      {x.duplicate_groups > 0 && <Duplicates run={run} />}
+
       <Card withBorder>
         <Group justify="space-between" mb="sm">
           <SegmentedControl
@@ -211,7 +278,14 @@ export default function Diagnosis({ run }: { run: Run }) {
                   <Table.Tr key={k}>
                     <Table.Td ff="monospace">{i.table}</Table.Td>
                     <Table.Td c="dimmed" style={{ whiteSpace: 'nowrap' }}>
-                      {where(i.source)}
+                      <Group gap={4} wrap="nowrap">
+                        {where(i.source)}
+                        <SourceButton
+                          runId={run.id}
+                          source={i.source}
+                          highlight={i.columns.map((c) => i.source?.columns[c] ?? '').filter(Boolean)}
+                        />
+                      </Group>
                     </Table.Td>
                     <Table.Td ff="monospace">{i.columns.length > 3 ? `${i.columns.length}개 컬럼` : i.columns.join(', ')}</Table.Td>
                     <Table.Td maw={260} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

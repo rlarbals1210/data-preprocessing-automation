@@ -91,6 +91,14 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
                limit: int = 50):
         return ws.issues(run_id, category, table, max(offset, 0), min(max(limit, 1), 500))
 
+    @app.get("/api/runs/{run_id}/duplicates")
+    def duplicates(run_id: str, offset: int = 0, limit: int = 50):
+        return ws.duplicates(run_id, max(offset, 0), min(max(limit, 1), 500))
+
+    @app.get("/api/runs/{run_id}/source")
+    def source_row(run_id: str, item_id: int, record: int):
+        return ws.source_row(run_id, item_id, record)
+
     @app.get("/api/runs/{run_id}/preview")
     def preview(run_id: str):
         return ws.changes_preview(run_id)
