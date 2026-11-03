@@ -246,6 +246,7 @@ T-05(AC-04-1·04-2): 개발용 한글 헤더 입력과 같은 내용을 영문 �
 3. 결과 파일 해시를 계산하고, 역추적으로 원본 위치 기준 전체 셀 대조를 확인한다.
 4. **DB 트랜잭션 하나**로 `result_version` 행과 실행 상태(완료/완료(문제 남음))를 기록한다.
 - 완료 판정 기준은 `result_version` 행 하나다. 행이 없는 시도 폴더는 미완료 흔적으로 남고 다운로드 대상이 아니다. 다운로드 시 해시를 다시 대조하고, 다르면 오류를 낸다.
+- 결과 폴더(`attempt-n/result/`, M1-10c·M3-3): 발행 가능한 테이블 CSV, `changes.csv`·`changes.json`(논리 null 구분), `diagnosis-before.json`·`diagnosis-after.json`, `held.json`, `absent-cells.json` — 모두 원본 위치 포함, 해시는 `result_version`에 기록. `manifest.json`은 적힌 파일 해시가 그 기록과 같을 때만 내려받는다. 실패한 실행은 결과 데이터 없이 실패 진단 리포트(`GET /failure-report`)만 준다.
 - T-09: 빈 허용 목록, 일부 승인, 후보 외 허용, 보류 셀 승인 시도, 정합성 재검사 실패, 발행 중 파일 실패, DB 기록 실패, 기존 명령줄 회귀.
 
 ---
@@ -375,6 +376,18 @@ T-11: workspace 안의 정답 폴더 심볼릭 링크, `../` 경로, 업로드 �
 
 - 응답 모델은 pydantic, OpenAPI에서 `openapi-typescript`로 프론트 타입 생성.
 - 오류 응답: `{code, message, details, location}`.
+
+**현재 구현 경로 (M3, 2026-11-03).** 웹 미리보기(W1)를 먼저 만들면서 위 설계와 경로 이름이 다르게 자랐다. 기능 대응은 같고, 출처·묶음·결과 단위 경로와 F08~F13 경로는 해당 마일스톤에서 맞춘다.
+
+| 메서드·경로 (`/api` 아래) | 기능 |
+|---|---|
+| `GET /sets` · `GET /sources` · `GET/POST /runs` | 설정 세트·출처 목록, 실행 목록·업로드(출처 필수) |
+| `GET /runs/{id}` | 실행(상태·상태 이유·승인 기록·표준 목록) |
+| `POST /runs/{id}/propose` · `PUT /runs/{id}/mapping` | 테이블 재제안, 매핑 확정(구조 승인) |
+| `POST /runs/{id}/diagnose` · `GET /diagnosis` · `GET /issues` · `GET /duplicates` · `GET /source` | 진단, 항목·중복 그룹, 원본 행 |
+| `GET /runs/{id}/preview` · `GET /preview/groups/{묶음}` · `PUT /selection` | 미리보기, 묶음 셀 목록, 선택(묶음·제외 셀) |
+| `POST /runs/{id}/execute` · `POST /retry` | 실행(해시 7종), 실패 실행 재시도 |
+| `GET /runs/{id}/result` · `GET /changes` · `GET /remaining` · `GET /files/{name}` · `GET /failure-report` | 결과·변경 내역·남은 문제·내려받기(해시 재대조)·실패 진단 리포트 |
 
 ### 12-2. 프론트엔드
 - React + TypeScript + Vite, **Mantine**(결정 D2, 정확한 버전·호환성은 구현 시 잠금 파일로 확정), React Router, TanStack Query, TanStack Table(가상 스크롤), Recharts.
