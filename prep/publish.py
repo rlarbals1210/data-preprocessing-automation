@@ -98,13 +98,19 @@ def write_files(attempt: Attempt, lineage: dict, tables: dict, names: dict[int, 
         extras = {"changes.json": translated}
         for name, out in (("before.json", "diagnosis-before.json"), ("after.json", "diagnosis-after.json")):
             extras[out] = loc.translate_report(json.loads((attempt.engine / name).read_text(encoding="utf-8")))
+        integrity = attempt.engine / "integrity.json"
+        if integrity.is_file():  # 발행 전 정합성 재검사(M4-3) — 관련 행 원본 위치 포함
+            after = json.loads(integrity.read_text(encoding="utf-8"))
+            after["violations"] = [v | {"sources": [loc.source(t, r) | {"table": t} for t, r in v["rows"]]}
+                                   for v in after["violations"]]
+            extras["integrity.json"] = after
         held = json.loads((attempt.engine / "held.json").read_text(encoding="utf-8"))
         extras["held.json"] = [h | {"source": loc.source(h["table"], h["record"], h["columns"])}
                                if h["table"] in loc.tables else h for h in held]
         for name, obj in extras.items():
             body = json.dumps(obj, ensure_ascii=False, indent=2).encode("utf-8")
             (stage / name).write_bytes(body)
-            rows = len(obj["issues"]) if isinstance(obj, dict) else len(obj)
+            rows = len(obj.get("issues", obj.get("violations", []))) if isinstance(obj, dict) else len(obj)
             files[name] = {"sha256": _sha(body), "rows": rows}
         manifest = {"files": files, "excluded_tables": excluded, "attempt": attempt.number}
         (stage / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")

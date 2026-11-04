@@ -91,6 +91,10 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
                limit: int = 50):
         return ws.issues(run_id, category, table, max(offset, 0), min(max(limit, 1), 500))
 
+    @app.get("/api/runs/{run_id}/integrity")
+    def integrity(run_id: str, basis: str = "raw", offset: int = 0, limit: int = 50):
+        return ws.integrity(run_id, basis, max(offset, 0), min(max(limit, 1), 500))
+
     @app.get("/api/runs/{run_id}/duplicates")
     def duplicates(run_id: str, offset: int = 0, limit: int = 50):
         return ws.duplicates(run_id, max(offset, 0), min(max(limit, 1), 500))

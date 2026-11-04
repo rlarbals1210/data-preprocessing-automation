@@ -33,6 +33,7 @@ class Bundle:
     held: list[dict]
     not_approved: list[dict]
     result: dict[str, dict] = field(default_factory=dict)  # 테이블 → {header, rows}
+    integrity: dict | None = None  # 정합성 결과(원문·가상 기준)
 
     @property
     def published(self) -> bool:
@@ -77,6 +78,7 @@ def load_bundle(folder: Path) -> Bundle:
                     _read_json(folder, "attempt/changes.json", files, []) if meta.get("published") else [],
                     _read_json(folder, "attempt/held.json", files, []),
                     _read_json(folder, "attempt/not-approved.json", files, []))
+    bundle.integrity = _read_json(folder, "integrity.json", files)
     if meta.get("published"):
         for rel in files:
             name = rel.removeprefix("result/")
@@ -94,6 +96,7 @@ class Evidence:
     held: set = field(default_factory=set)
     not_approved: set = field(default_factory=set)
     changes: dict = field(default_factory=dict)  # (t, r, c) → change
+    integrity: dict = field(default_factory=lambda: defaultdict(set))  # (t, r) → 위반 규칙 ID(원문·가상)
 
     @classmethod
     def of(cls, bundle: Bundle) -> Evidence:
@@ -110,4 +113,7 @@ class Evidence:
                 ev.held.add((h["table"], h["record"], c))
         ev.not_approved = {(n["table"], n["record"], n["column"]) for n in bundle.not_approved}
         ev.changes = {(c["table"], c["record"], c["column"]): c for c in bundle.changes}
+        for basis in ("raw", "virtual"):
+            for v in (bundle.integrity or {}).get(basis, {}).get("violations", []):
+                ev.integrity[(v["table"], v["record"])].add(v["rule"])
         return ev

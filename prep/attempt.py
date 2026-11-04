@@ -58,9 +58,10 @@ def finish(store: Store, attempt: Attempt, outcome: str, error: str | None = Non
                   (outcome, error, None if audit is None else json.dumps(audit, ensure_ascii=False), attempt.id))
 
 
-def run_engine(attempt: Attempt, view_dir: Path, config: dict, allow: list) -> dict:
-    """엔진 확장 ③으로 허용 셀만 정제한다. 실패하면 엔진 예외를 그대로 올린다."""
-    return clean(view_dir, config, attempt.engine, allow={tuple(k) for k in allow})
+def run_engine(attempt: Attempt, view_dir: Path, config: dict, allow: list, extra_blocked: list | None = None) -> dict:
+    """엔진 확장 ③으로 허용 셀만 정제한다. extra_blocked: 정합성 보류 셀(TD 8-3). 실패하면 예외를 그대로 올린다."""
+    return clean(view_dir, config, attempt.engine, allow={tuple(k) for k in allow},
+                 extra_blocked=[tuple(k) for k in extra_blocked] if extra_blocked else None)
 
 
 def audit(attempt: Attempt, view_dir: Path, guard: Guard, allow: list, approved_view_hash: str,

@@ -10,6 +10,7 @@ workspace/exports/<실행>/export-<n>/ 에 쓴다. 서비스 쪽 코드이므로
 - mapping.json  항목별 자동 제안(사람 확인 전 동결본)과 최종 매핑
 - lineage.json  표준화 뷰 역추적 표(뷰 레코드 → 업로드 항목·원래 레코드, 뷰 컬럼 → 원래 이름)
 - diagnosis.json 정제 전 진단(뷰 좌표 + 원본 위치)
+- integrity.json 정합성 결과(원문·가상 기준, M4-3)
 - apply-plan.json 적용 계획(허용·보류 셀)
 - attempt/      마지막 시도의 감사·변경 내역·보류·승인 안 함·정제 후 진단(엔진이 썼다면)
 - result/       발행된 결과 버전의 파일(발행된 경우만, 해시 재대조 후 복사)
@@ -30,7 +31,7 @@ from prep import publish
 from prep.preview import FINISHED, FlowError, Workspace
 
 FORMAT = "export-v1"
-ATTEMPT_FILES = ("changes.json", "held.json", "not-approved.json", "after.json")
+ATTEMPT_FILES = ("changes.json", "held.json", "not-approved.json", "after.json", "integrity.json")
 
 
 def _sha(data: bytes) -> str:
@@ -71,7 +72,8 @@ def export_run(ws: Workspace, run_id: str) -> Path:
             src = base / "view" / name
             if src.is_file():
                 put(name, src.read_bytes())
-        for name, out in (("report.json", "diagnosis.json"), ("apply-plan.json", "apply-plan.json")):
+        for name, out in (("report.json", "diagnosis.json"), ("apply-plan.json", "apply-plan.json"),
+                          ("integrity.json", "integrity.json")):
             src = base / name
             if src.is_file():
                 put(out, src.read_bytes())

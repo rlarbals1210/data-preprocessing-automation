@@ -156,11 +156,9 @@ def detected(case: Case, p: Place, ev: Evidence, pk: dict[str, list[str]]) -> tu
     if t == "duplicate_pk":
         groups = ev.groups.get((p.table, p.record), [])
         return any(g["code"] == "unique" and g["columns"] == pk.get(p.table) for g in groups), None
-    if t == "total_conflict":
-        hit = any(code == "R02" and cat == VIOLATION
-                  for (tb, rec, _), sig in ev.cell.items() if tb == p.table and rec == p.record
-                  for cat, code, _ in sig)
-        return hit, None if hit else "정합성 검사(R02) 미구현 — M4"
+    if t == "total_conflict":  # 그 주문을 기준 행으로 하는 R02 위반 묶음(원문 또는 가상 기준)
+        hit = any(rule.startswith("R02") for rule in ev.integrity.get((p.table, p.record), set()))
+        return hit, None
     sig = _signals(ev, p)
     if t == "required_missing":
         return any(cat == VIOLATION and code == "required" for cat, code, _ in sig), None

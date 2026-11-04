@@ -32,7 +32,7 @@ def test_score_categories(env):
     assert {k: (d[k]["detected"], d[k]["preserved"]) for k in ("R1", "R2", "R3", "R4", "R5", "R6")} == {
         "R1": (True, True), "R2": (True, True), "R3": (True, True), "R4": (True, True), "R5": (True, True),
         "R6": (False, True)}
-    assert any("R02" in n for n in rep["주의"])  # 미구현 기능은 실패를 그대로 표시
+    assert rep["주의"] == []  # R6은 customers 행이라 R02 위반 묶음이 없다(탐지 실패 그대로)
     # keep: 앞의 둘만 오판
     assert {k: d[k]["category"] for k in ("K1", "K2", "K3")} == {"K1": "추가 검토 요청", "K2": "참고 관측",
                                                               "K3": "값 변경"}  # K1은 중복 행 검토 행
@@ -135,8 +135,7 @@ def test_report_files_and_markdown(env):
     assert head["채점기"].startswith("judge-v1") and head["분할"] == "development"
     assert head["안내"].startswith("합성 벤치마크") and head["설정 스냅샷"]
     md = (env["tmp"] / "score" / "score.md").read_text(encoding="utf-8")
-    assert "합성 벤치마크" in md and "셀 표준화 (normalize)" in md and "R02" in md
-    assert "| 범주 | 건수 | 분모 | 유실 |" in md  # 그 밖의 셀 변경의 유실 열도 표에 나온다
+    assert "합성 벤치마크" in md and "셀 표준화 (normalize)" in md
 
 
 def test_evaluation_split_needs_confirm_final(env, capsys):

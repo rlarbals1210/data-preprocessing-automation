@@ -44,7 +44,7 @@ def test_evidence_files_downloadable_and_verified(client, tmp_path):
     run, res = executed(client, ["customers.csv"])
     full = client.get(f"/api/runs/{run['id']}/result").json()
     assert full["evidence"] == ["changes.csv", "changes.json", "diagnosis-before.json", "diagnosis-after.json",
-                                "held.json", "absent-cells.json", "manifest.json"]
+                                "integrity.json", "held.json", "absent-cells.json", "manifest.json"]
     changes = client.get(f"/api/runs/{run['id']}/files/changes.json")
     assert changes.headers["content-type"].startswith("application/json")
     items = changes.json()

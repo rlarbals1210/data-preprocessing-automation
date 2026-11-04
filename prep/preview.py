@@ -24,21 +24,24 @@ from prep.apply import ApplyError, build_apply_plan, group_id, verify_plan
 from prep.apply import candidates as apply_candidates
 from prep.apply import groups as apply_groups
 from prep.guard import Guard
+from prep.integrity import Data as IntegrityData
+from prep.integrity import evaluate as evaluate_integrity
+from prep.integrity import provider_overrides
 from prep.mapping import Catalog, propose, validate_final
 from prep.plan import build_plan
 from prep.runs import ApprovalError, RunLedger
 from prep.snapshot import SnapshotError, create_snapshot, load_snapshot
 from prep.store import Store
 from prep.upload import BlobStore, UploadError, ingest
-from prep.view import Locator, ViewInput, build_view
+from prep.view import EXTRAS, Locator, ViewInput, build_view
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SETS = {"shop": "쇼핑몰 표준", "none": "설정 없음"}
 RUN_ID = re.compile(r"[0-9]{8}T[0-9]{6}Z-[0-9a-f]{6}")
 FILE_NAME = re.compile(r"[A-Za-z0-9가-힣_.-]{1,100}\.csv")
 FINISHED = {"completed", "completed_with_issues", "failed"}
-EVIDENCE_FILES = ("changes.json", "diagnosis-before.json", "diagnosis-after.json", "held.json", "absent-cells.json",
-                  "manifest.json")  # 내부 검토용 근거 파일(FS F07 출력)
+EVIDENCE_FILES = ("changes.json", "diagnosis-before.json", "diagnosis-after.json", "integrity.json", "held.json",
+                  "absent-cells.json", "manifest.json")  # 내부 검토용 근거 파일(FS F07 출력)
 
 
 class FlowError(ValueError):
@@ -316,12 +319,95 @@ class Workspace:
         self.ledger.record_view(run["db_run"], f"runs/{run_id}/view", built.hash)
         report = Locator(built.lineage).translate_report(diagnose(view, config))
         (base / "report.json").write_text(json.dumps(report, ensure_ascii=False), encoding="utf-8")
+        (base / "integrity.json").unlink(missing_ok=True)
+        raw = self._integrity_data(run, view)
+        if raw is not None:  # 원문·가상 기준(F05) — 보류는 이 둘로 정한다(선택과 무관)
+            doc = self._integrity_doc(run)[0]
+            cells, _ = apply_candidates(report)
+            virtual = self._integrity_data(run, view, provider_overrides(cells))
+            integ = {"raw": evaluate_integrity(doc, raw, "raw"), "virtual": evaluate_integrity(doc, virtual, "virtual")}
+            (base / "integrity.json").write_text(json.dumps(integ, ensure_ascii=False), encoding="utf-8")
         self._transition(run, "diagnosed")
         run.update(result=None, view_hash=built.hash,
                    plan=None if plan is None else {k: plan[k] for k in ("skipped", "tables", "completeness", "hash")})
         (base / "engine-config.json").write_text(json.dumps(config, ensure_ascii=False), encoding="utf-8")
         self.save(run)
         return self.diagnosis(run_id)
+
+    # ---- 정합성 (M4-3, TD 8-3·9-2) ----
+    def _integrity_doc(self, run: dict) -> tuple[dict, dict, dict] | None:
+        """(규칙, schema, 논리 설정) — 스냅샷에서만 읽는다. 규칙 파일이 없는 설정 세트면 None."""
+        if not run["snapshot"]:
+            return None
+        snap = self.guard.safe_join(self.root, "config-snapshots", run["snapshot"])
+        path = snap / "config/sets/shop/integrity.json"
+        if not path.is_file():
+            return None
+        read = lambda rel: json.loads((snap / rel).read_text(encoding="utf-8"))  # noqa: E731
+        return read("config/sets/shop/integrity.json"), read("schema.json"), read(
+            "config/sets/shop/logical-diagnostics.json")
+
+    def _integrity_data(self, run: dict, folder: Path, overrides: dict | None = None) -> IntegrityData | None:
+        loaded = self._integrity_doc(run)
+        if loaded is None:
+            return None
+        _, schema, logical = loaded
+        rows, columns = {}, {}
+        for path in sorted(folder.glob("*.csv")):
+            table = read_table(path, "utf-8", ",")
+            rows[path.stem] = [{k: v for k, v in r["values"].items() if k != EXTRAS} for r in table["rows"]]
+            columns[path.stem] = {h for h in table["headers"] if h != EXTRAS}
+        types = {t: {f["name"]: f["type"] for f in v["fields"]} for t, v in schema["tables"].items()}
+        keys = {t: [f["name"] for f in v["fields"] if f.get("primary_key")] for t, v in schema["tables"].items()}
+        compare = {t: v.get("columns", {}) for t, v in logical.get("tables", {}).items()}
+        return IntegrityData(rows, types, keys, overrides or {}, columns=columns, compare=compare)
+
+    def _integrity(self, run_id: str) -> dict | None:
+        path = self.run_dir(run_id) / "integrity.json"
+        return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+
+    def _blocked(self, run_id: str) -> dict:
+        """정합성 보류 셀(TD 8-3): 원문 또는 가상 기준 위반 묶음의 계산에 직접 쓰인 셀 → 걸린 규칙."""
+        out: dict = defaultdict(set)
+        integ = self._integrity(run_id)
+        for basis in ("raw", "virtual"):
+            for v in (integ or {}).get(basis, {}).get("violations", []):
+                for c in v["cells"]:
+                    out[tuple(c)].add(v["rule"])
+        return out
+
+    def integrity(self, run_id: str, basis: str, offset: int, limit: int) -> dict:
+        """정합성 결과(SC06): 규칙별 상태·건수와 위반 묶음(관련 행 원본 위치). basis: raw·virtual·approved·result."""
+        run = self.load(run_id)
+        integ = self._integrity(run_id)
+        if integ is None:
+            raise FlowError("no_integrity", "정합성 검사를 하지 않은 실행이다", 404)
+        if basis in ("raw", "virtual"):
+            result = integ[basis]
+        elif basis == "approved":  # 현재 적용 선택만 반영한 계산 — 보여 주기만 한다(TD 8-3)
+            report, plan = self._report(run_id), self._plan(run_id)
+            cells, _ = apply_candidates(report, self._blocked(run_id))
+            data = self._integrity_data(run, self.guard.safe_join(self.run_dir(run_id), "view"),
+                                        provider_overrides(cells, {tuple(k) for k in plan["allow"]}))
+            result = evaluate_integrity(self._integrity_doc(run)[0], data, "approved")
+        elif basis == "result":
+            path = self._engine_dir(run) / "integrity.json"
+            if not path.is_file():
+                raise FlowError("no_integrity", "발행 결과의 정합성 재검사 기록이 없다", 404)
+            result = json.loads(path.read_text(encoding="utf-8"))
+        else:
+            raise FlowError("bad_basis", "basis는 raw·virtual·approved·result 중 하나", 400)
+        lineage = json.loads((self.run_dir(run_id) / "view" / "lineage.json").read_text(encoding="utf-8"))
+        loc = Locator(lineage)
+        names = {f["item_id"]: f["name"] for f in run["files"]}
+        items = []
+        for v in result["violations"][offset: offset + limit]:
+            sources = [loc.source(t, r) | {"table": t, "file": None} for t, r in v["rows"]]
+            for src in sources:
+                src["file"] = names.get(src["item_id"])
+            items.append(v | {"sources": sources})
+        return {"basis": result["basis"], "rules": result["rules"], "total": len(result["violations"]),
+                "items": items}
 
     def _report(self, run_id: str) -> dict:
         path = self.run_dir(run_id) / "report.json"
@@ -349,7 +435,17 @@ class Workspace:
             "plan_tables": (run["plan"] or {}).get("tables", {}),
             "completeness": (run["plan"] or {}).get("completeness", "full"),
             "errors": report["errors"],
+            "integrity": self._integrity_summary(run_id),
         }
+
+    def _integrity_summary(self, run_id: str) -> dict | None:
+        integ = self._integrity(run_id)
+        if integ is None:
+            return None
+        return {b: {"violations": len(integ[b]["violations"]),
+                    "not_computable": len(integ[b]["not_computable"]),
+                    "not_run": sum(r["status"] == "not_run" for r in integ[b]["rules"]),
+                    "disabled": sum(r["status"] == "disabled" for r in integ[b]["rules"])} for b in ("raw", "virtual")}
 
     def issues(self, run_id: str, category: str | None, table: str | None, offset: int, limit: int) -> dict:
         items = self._report(run_id)["issues"]
@@ -404,7 +500,7 @@ class Workspace:
         path = self.run_dir(run_id) / "apply-plan.json"
         if path.is_file():
             return json.loads(path.read_text(encoding="utf-8"))
-        plan = build_apply_plan(report, run["view_hash"])
+        plan = build_apply_plan(report, run["view_hash"], extra_blocked=self._blocked(run_id))
         if run["status"] not in FINISHED:
             self._store_plan(run, plan)
         return plan
@@ -416,7 +512,7 @@ class Workspace:
 
     def changes_preview(self, run_id: str) -> dict:
         report = self._report(run_id)
-        cells, held = apply_candidates(report)
+        cells, held = apply_candidates(report, self._blocked(run_id))
         plan = self._plan(run_id)
         run = self.load(run_id)
         if run["status"] == "diagnosed":
@@ -438,7 +534,8 @@ class Workspace:
     def preview_cells(self, run_id: str, gid: str, offset: int, limit: int) -> dict:
         """묶음 하나의 셀 목록(SC07): 원본 위치·전후 값·제외 여부, 보류 셀은 막는 위반·검토(AC-06-2)."""
         report = self._report(run_id)
-        cells, held = apply_candidates(report)
+        blocked = self._blocked(run_id)
+        cells, held = apply_candidates(report, blocked)
         plan = self._plan(run_id)
         excluded = {tuple(k) for k in plan["excluded_cells"]}
         names = {f["item_id"]: f["name"] for f in self.load(run_id)["files"]}
@@ -456,6 +553,8 @@ class Workspace:
                 if i["category"] in ("business_rule_violation", "human_review") and i["code"] != "duplicate_row":
                     for c in i["columns"]:
                         blocking[(i["table"], i["record"], c)].append({"category": i["category"], "code": i["code"]})
+            for cell, rules in blocked.items():
+                blocking[cell] += [{"category": "integrity", "code": r} for r in sorted(rules)]
         items = []
         for key, v, is_held in rows[offset: offset + limit]:
             source = v.get("source") or {}
@@ -471,7 +570,7 @@ class Workspace:
         run, report = self.load(run_id), self._report(run_id)
         self._open(run)
         try:
-            plan = build_apply_plan(report, run["view_hash"], selection)
+            plan = build_apply_plan(report, run["view_hash"], selection, extra_blocked=self._blocked(run_id))
         except (ApplyError, TypeError, ValueError) as exc:
             raise FlowError("bad_selection", str(exc)) from exc
         self._store_plan(run, plan)
@@ -491,7 +590,7 @@ class Workspace:
             approval = self.ledger.approve_execution(run["db_run"], presented or {})
             load_snapshot(self.root, run["config_hash"], self.guard)  # 승인 뒤 설정 스냅샷 변조 확인
             self.ledger.check_execution(run["db_run"], approval)
-            verify_plan(plan, report, run["view_hash"])  # 승인 때와 뷰·후보가 같은지
+            verify_plan(plan, report, run["view_hash"], self._blocked(run_id))  # 승인 때와 뷰·후보가 같은지
         except ApprovalError as exc:
             raise FlowError("approval_mismatch", str(exc), 409) from exc
         except (SnapshotError, ApplyError) as exc:
@@ -501,7 +600,8 @@ class Workspace:
         attempt = attempts.start(self.store, self.guard, run["db_run"], base, approval)  # M1-10b 새 시도 폴더
         stage = "engine_failed"
         try:
-            out = attempts.run_engine(attempt, view, config, plan["allow"])  # 엔진 확장 ③: 허용 셀만
+            out = attempts.run_engine(attempt, view, config, plan["allow"],  # 엔진 확장 ③: 허용 셀만
+                                      extra_blocked=sorted(self._blocked(run_id)))
             if out["changed_cells"] != plan["counts"]["allowed"]:
                 raise ValueError("실행 변경 건수가 적용 계획과 다르다")  # AC-06-5
             stage = "audit_failed"
@@ -510,8 +610,9 @@ class Workspace:
                     self.blobs.get(f["sha256"])  # 보관 원본 해시 대조
             audit = attempts.audit(attempt, view, self.guard, plan["allow"], run["view_hash"])  # AC-07-1
             remaining = out["after_categories"]
+            integrity_after = self._recheck_integrity(run, attempt)  # TD 8-5 2단계: 실제 결과로 재평가
             status = "completed_with_issues" if remaining.get("business_rule_violation") or remaining.get(
-                "human_review") else "completed"
+                "human_review") or integrity_after else "completed"
             stage = "publish_failed"  # M1-10c: 결과 파일 → DB 트랜잭션 하나
             lineage = json.loads((view / "lineage.json").read_text(encoding="utf-8"))
             manifest = publish.write_files(attempt, lineage, (run.get("plan") or {}).get("tables", {}),
@@ -530,10 +631,26 @@ class Workspace:
                                               "after": remaining, "not_approved": out["not_approved_cells"],
                                               "plan_hash": plan["hash"], "approval": approval,
                                               "attempt": attempt.number, "audit": audit,
-                                              "result_version": version,
+                                              "result_version": version, "integrity_after": integrity_after,
                                               "excluded_tables": manifest["excluded_tables"]})
         self.save(run)
         return run["result"]
+
+    def _recheck_integrity(self, run: dict, attempt) -> int:
+        """실제 정제 결과로 정합성을 다시 평가한다. 진단 때(원문·가상) 없던 위반이 생기면 실패(발행 안 함).
+        비교 키 = 규칙 ID + 관련 행 목록(결과 k번째 행 = 뷰 레코드 k). 남은 위반 묶음 수를 돌려준다."""
+        before = self._integrity(run["id"])
+        data = self._integrity_data(run, attempt.engine / "data")
+        if before is None or data is None:
+            return 0
+        after = evaluate_integrity(self._integrity_doc(run)[0], data, "result")
+        (attempt.engine / "integrity.json").write_text(json.dumps(after, ensure_ascii=False), encoding="utf-8")
+        key = lambda v: (v["rule"], tuple(tuple(x) for x in v["rows"]))  # noqa: E731
+        known = {key(v) for b in ("raw", "virtual") for v in before[b]["violations"]}
+        new = [v for v in after["violations"] if key(v) not in known]
+        if new:
+            raise ValueError(f"정합성 재검사에서 신규 위반: {sorted({v['rule'] for v in new})}")
+        return len(after["violations"])
 
     def result(self, run_id: str) -> dict:
         run = self.load(run_id)

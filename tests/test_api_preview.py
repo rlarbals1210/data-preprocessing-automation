@@ -47,13 +47,16 @@ def test_full_flow_all_tables(client):
     assert d["engine_status"] == "completed" and d["rules"]["not_executed"] == 0
     assert d["category_counts"]["standardization_candidate"] == 4424
     p = client.get(f"/api/runs/{run['id']}/preview").json()
-    assert p["total_cells"] == 4424 and p["groups"][0]["examples"] and all(g["approved"] for g in p["groups"])
+    # M4-3: 정합성 위반 묶음의 계산에 쓰인 후보 셀은 보류(TD 8-3)
+    assert p["held"] == 2 and p["total_cells"] == 4424 - p["held"]
+    assert p["groups"][0]["examples"] and all(g["approved"] for g in p["groups"])
     res = execute(client, run).json()
-    assert res["changed_cells"] == 4424 and res["rows"] == 6409
+    assert res["changed_cells"] == p["total_cells"] and res["rows"] == 6409
+    assert res["integrity_after"] > 0  # 남은 정합성 위반 묶음이 있다(신규 위반 아님)
     full = client.get(f"/api/runs/{run['id']}/result").json()
     assert len(full["files"]) == 13
     ch = client.get(f"/api/runs/{run['id']}/changes", params={"limit": 5}).json()
-    assert ch["total"] == 4424 and len(ch["items"]) == 5
+    assert ch["total"] == p["total_cells"] and len(ch["items"]) == 5
     first = ch["items"][0]
     assert first["source"]["file"] == f"{first['table']}.csv" and first["source"]["record"] >= 1
     iss = client.get(f"/api/runs/{run['id']}/issues", params={"category": "human_review", "limit": 3}).json()
