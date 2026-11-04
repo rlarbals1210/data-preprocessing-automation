@@ -48,6 +48,7 @@ export type ResultSummary = {
   result_version?: number;
   excluded_tables?: Record<string, string>;
   stage?: string;
+  integrity_after?: number;
   audit?: { passed: boolean; checked_cells: number; changed_cells: number; allowed_cells: number };
   error?: string;
 };
@@ -92,7 +93,30 @@ export type Diagnosis = {
   plan_tables: Record<string, TablePlan>;
   completeness: 'full' | 'partial';
   errors: { table: string; error: string }[];
+  integrity: Record<'raw' | 'virtual', { violations: number; not_computable: number; not_run: number; disabled: number }> | null;
 };
+export type IntegrityBasis = 'raw' | 'virtual' | 'approved' | 'result';
+export type IntegrityRule = {
+  id: string;
+  description: string;
+  anchor: string;
+  type: string;
+  status: 'ran' | 'disabled' | 'not_run';
+  reason: string | null;
+  counts: { ok: number; violation: number; not_applicable: number; not_computable: Record<string, number> };
+};
+export type IntegrityViolation = {
+  rule: string;
+  table: string;
+  record: number;
+  basis: string;
+  left: number | string | null;
+  right: number | string | null;
+  detail: unknown;
+  rows: [string, number][];
+  sources: (Source & { table: string })[];
+};
+export type IntegrityResult = { basis: string; rules: IntegrityRule[] } & Page<IntegrityViolation>;
 export type Source = {
   file: string | null;
   item_id: number;
@@ -230,6 +254,8 @@ export const api = {
   diagnosis: (id: string) => req<Diagnosis>(`/runs/${id}/diagnosis`),
   issues: (id: string, p: { category?: string; table?: string | null; offset: number; limit: number }) =>
     req<Page<Issue>>(`/runs/${id}/issues${q(p)}`),
+  integrity: (id: string, basis: IntegrityBasis, offset: number, limit: number) =>
+    req<IntegrityResult>(`/runs/${id}/integrity${q({ basis, offset, limit })}`),
   duplicates: (id: string, offset: number, limit: number) =>
     req<Page<DuplicateGroup>>(`/runs/${id}/duplicates${q({ offset, limit })}`),
   sourceRow: (id: string, item_id: number, record: number) =>

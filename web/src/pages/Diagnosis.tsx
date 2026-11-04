@@ -234,6 +234,30 @@ export default function Diagnosis({ run }: { run: Run }) {
         </Table>
       </Card>
 
+      {x.integrity && (
+        <Card withBorder>
+          <Group justify="space-between">
+            <Group gap="lg">
+              <Title order={5}>정합성</Title>
+              <Text fz="sm">
+                원문 기준 위반 <b>{fmt(x.integrity.raw.violations)}</b>
+              </Text>
+              <Text fz="sm">
+                가상 기준 위반 <b>{fmt(x.integrity.virtual.violations)}</b>
+              </Text>
+              {x.integrity.virtual.not_run > 0 && (
+                <Badge variant="light" color="orange">
+                  미실행 규칙 {x.integrity.virtual.not_run}
+                </Badge>
+              )}
+            </Group>
+            <Button component={Link} to={`/runs/${run.id}/integrity`} variant="light" rightSection={<IconArrowRight size={16} />}>
+              정합성 검토
+            </Button>
+          </Group>
+        </Card>
+      )}
+
       {x.duplicate_groups > 0 && <Duplicates run={run} />}
 
       <Card withBorder>

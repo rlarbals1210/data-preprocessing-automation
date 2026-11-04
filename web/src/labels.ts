@@ -128,3 +128,14 @@ export const invalidated = (reason: string | null) => {
     return `승인 때와 다름: ${reason.slice(14).split(',').map((k) => HASH_LABEL[k] ?? k).join(', ')}`;
   return INVALIDATED[reason] ?? reason;
 };
+
+export const INTEGRITY_BASIS: Record<string, string> = { raw: '원문 기준', virtual: '가상 기준', approved: '승인 기준', result: '결과 재검사' };
+export const INTEGRITY_REASON: Record<string, string> = {
+  parse_error: '해석 불가',
+  missing_value: '값 없음',
+  missing_reference: '연결 대상 없음',
+  duplicate_parent: '부모 키 중복',
+  ambiguous_join: '연결 모호',
+  missing_column: '컬럼 없음',
+  excluded_target: '대상 테이블 없음',
+};

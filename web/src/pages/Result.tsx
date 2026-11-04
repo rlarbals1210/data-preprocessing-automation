@@ -29,6 +29,7 @@ const EVIDENCE: Record<string, string> = {
   'changes.json': '변경 내역 (JSON, 논리 null 구분)',
   'diagnosis-before.json': '정제 전 진단',
   'diagnosis-after.json': '정제 후 진단',
+  'integrity.json': '정합성 재검사',
   'held.json': '보류 목록',
   'absent-cells.json': '원래 없던 셀',
   'manifest.json': 'manifest',
@@ -284,6 +285,18 @@ export default function Result({ run }: { run: Run }) {
             </Card>
           </SimpleGrid>
 
+          {!!x.integrity_after && (
+            <Alert color="orange" data-testid="integrity-after">
+              <Group justify="space-between">
+                <Text fz="sm">
+                  정합성 위반 묶음 <b>{fmt(x.integrity_after)}</b>이 결과에 남아 있습니다(진단 때 확인한 위반, 자동 수정 안 함).
+                </Text>
+                <Anchor component={Link} to={`/runs/${run.id}/integrity`} fz="sm">
+                  정합성 검토
+                </Anchor>
+              </Group>
+            </Alert>
+          )}
           {x.status === 'completed_with_issues' && <Remaining run={run} counts={x.after} />}
 
           <Card withBorder>

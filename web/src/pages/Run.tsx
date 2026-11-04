@@ -5,6 +5,7 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } fr
 import { FINISHED, api, type Run } from '../api';
 import { APPROVAL_KIND, RUN_STATUS, SET_LABEL, invalidated, when } from '../labels';
 import Diagnosis from './Diagnosis';
+import Integrity from './Integrity';
 import Mapping from './Mapping';
 import Preview from './Preview';
 import Result from './Result';
@@ -17,7 +18,7 @@ const STEPS: Step[] = [
   { key: 'drift', label: '스키마 변경', disabled: true },
   { key: 'mapping', label: '매핑 확인', ready: () => true },
   { key: 'diagnosis', label: '진단', ready: (r) => DIAGNOSED.includes(r.status) },
-  { key: 'integrity', label: '정합성', disabled: true },
+  { key: 'integrity', label: '정합성', ready: (r) => DIAGNOSED.includes(r.status) },
   { key: 'preview', label: '미리보기·승인', ready: (r) => DIAGNOSED.includes(r.status) },
   { key: 'result', label: '결과', ready: (r) => FINISHED.includes(r.status) },
 ];
@@ -126,6 +127,7 @@ export default function RunPage() {
         <Route index element={<Navigate to={start} replace />} />
         <Route path="mapping" element={<Mapping key={r.id} run={r} />} />
         <Route path="diagnosis" element={<Diagnosis run={r} />} />
+        <Route path="integrity" element={<Integrity run={r} />} />
         <Route path="preview" element={<Preview run={r} />} />
         <Route path="result" element={<Result run={r} />} />
         <Route path="*" element={<Navigate to={start} replace />} />
