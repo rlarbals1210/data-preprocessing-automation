@@ -173,6 +173,7 @@ export default function Preview({ run }: { run: Run }) {
       )}
       {select.error && <Alert color="red">{(select.error as Error).message}</Alert>}
       <Card withBorder p={0}>
+        <Table.ScrollContainer minWidth={960} type="native">
         <Table verticalSpacing="sm" highlightOnHover>
           <Table.Thead>
             <Table.Tr>
@@ -217,8 +218,10 @@ export default function Preview({ run }: { run: Run }) {
                   </Table.Td>
                   <Table.Td ff="monospace">{g.table}</Table.Td>
                   <Table.Td ff="monospace">{g.column}</Table.Td>
-                  <Table.Td>
-                    <Badge variant="light">{CHANGE[g.code] ?? CODE[g.code] ?? g.code}</Badge>
+                  <Table.Td style={{ whiteSpace: 'nowrap' }}>
+                    <Badge variant="light" styles={{ root: { overflow: 'visible' }, label: { overflow: 'visible' } }}>
+                      {CHANGE[g.code] ?? CODE[g.code] ?? g.code}
+                    </Badge>
                   </Table.Td>
                   <Table.Td ta="right" style={{ whiteSpace: 'nowrap' }}>
                     {fmt(g.cells - (g.excluded ?? 0))}
@@ -264,6 +267,7 @@ export default function Preview({ run }: { run: Run }) {
             ))}
           </Table.Tbody>
         </Table>
+        </Table.ScrollContainer>
       </Card>
       <Modal opened={open} onClose={() => setOpen(false)} title="최종 확인" centered>
         <Stack>
