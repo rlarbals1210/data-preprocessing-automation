@@ -1,0 +1,409 @@
+{
+  "version": 1,
+  "rules": [
+    {
+      "id": "R01_line_total",
+      "type": "row_equation",
+      "enabled": true,
+      "anchor": "order_items",
+      "left": {
+        "col": "line_total"
+      },
+      "right": {
+        "sub": [
+          {
+            "mul": [
+              {
+                "col": "quantity"
+              },
+              {
+                "col": "unit_price"
+              }
+            ]
+          },
+          {
+            "col": "discount_amount"
+          }
+        ]
+      },
+      "description": "항목 금액 = 수량 × 단가 − 할인 (규칙 4)"
+    },
+    {
+      "id": "R02_order_total",
+      "type": "parent_sum_equation",
+      "enabled": true,
+      "anchor": "orders",
+      "left": {
+        "col": "order_total"
+      },
+      "right": {
+        "add": [
+          {
+            "sum": {
+              "path": [
+                {
+                  "to": "order_items",
+                  "on": [
+                    [
+                      "order_id",
+                      "order_id"
+                    ]
+                  ]
+                }
+              ],
+              "col": "line_total"
+            }
+          },
+          {
+            "col": "shipping_fee"
+          }
+        ]
+      },
+      "empty_child": "violation",
+      "description": "주문 금액 = 항목 금액 합계 + 배송비. 주문은 상세를 1개 이상 가짐 (규칙 4)"
+    },
+    {
+      "id": "R03_paid_before_shipped",
+      "type": "time_order",
+      "enabled": true,
+      "anchor": "shipments",
+      "when": {
+        "all": [
+          {
+            "col": "shipment_status",
+            "in": [
+              "shipped",
+              "delivered"
+            ]
+          },
+          {
+            "present": "shipped_at"
+          }
+        ]
+      },
+      "earlier": {
+        "max": {
+          "path": [
+            {
+              "to": "payments",
+              "on": [
+                [
+                  "order_id",
+                  "order_id"
+                ]
+              ],
+              "where": {
+                "col": "payment_status",
+                "in": [
+                  "succeeded"
+                ]
+              }
+            }
+          ],
+          "col": "paid_at"
+        }
+      },
+      "later": {
+        "col": "shipped_at"
+      },
+      "empty_child": "not_computable",
+      "description": "출고는 성공 결제 이후 (규칙 9). 성공 결제가 없으면 R06이 다룸"
+    },
+    {
+      "id": "R04_shipped_before_delivered",
+      "type": "time_order",
+      "enabled": true,
+      "anchor": "shipments",
+      "when": {
+        "all": [
+          {
+            "col": "shipment_status",
+            "in": [
+              "delivered"
+            ]
+          },
+          {
+            "present": "shipped_at"
+          },
+          {
+            "present": "delivered_at"
+          }
+        ]
+      },
+      "earlier": {
+        "col": "shipped_at"
+      },
+      "later": {
+        "col": "delivered_at"
+      },
+      "description": "배송 완료는 출고 시각 이후. 준비 상태의 빈 시각은 적용 대상 아님 (규칙 9)"
+    },
+    {
+      "id": "R05_delivered_before_return",
+      "type": "time_order",
+      "enabled": true,
+      "anchor": "returns",
+      "when": {
+        "present": "requested_at"
+      },
+      "earlier": {
+        "path": [
+          {
+            "to": "return_items",
+            "on": [
+              [
+                "return_id",
+                "return_id"
+              ]
+            ]
+          },
+          {
+            "to": "shipment_items",
+            "on": [
+              [
+                "shipment_item_id",
+                "shipment_item_id"
+              ]
+            ]
+          },
+          {
+            "to": "shipments",
+            "on": [
+              [
+                "shipment_id",
+                "shipment_id"
+              ]
+            ]
+          }
+        ],
+        "col": "delivered_at"
+      },
+      "later": {
+        "col": "requested_at"
+      },
+      "each": true,
+      "missing_earlier": "violation",
+      "empty_child": "not_computable",
+      "description": "연결된 모든 출고의 배송 완료 시각 ≤ 반품 접수. 연결 출고에 배송 완료 시각이 없으면 위반 (규칙 11)"
+    },
+    {
+      "id": "R06_paid_order_has_one_success_payment",
+      "type": "status_requires",
+      "enabled": true,
+      "anchor": "orders",
+      "when": {
+        "col": "order_status",
+        "in": [
+          "paid",
+          "processing",
+          "completed"
+        ]
+      },
+      "requires": [
+        {
+          "count": {
+            "path": [
+              {
+                "to": "payments",
+                "on": [
+                  [
+                    "order_id",
+                    "order_id"
+                  ]
+                ],
+                "where": {
+                  "col": "payment_status",
+                  "in": [
+                    "succeeded"
+                  ]
+                }
+              }
+            ]
+          },
+          "op": "eq",
+          "value": 1
+        }
+      ],
+      "description": "결제 완료·처리 중·완료 주문은 성공 결제 정확히 1건. 시도는 여러 번 가능 (규칙 7)"
+    },
+    {
+      "id": "R07_pending_order_has_no_success_or_shipment",
+      "type": "status_requires",
+      "enabled": true,
+      "anchor": "orders",
+      "when": {
+        "col": "order_status",
+        "in": [
+          "pending_payment"
+        ]
+      },
+      "requires": [
+        {
+          "count": {
+            "path": [
+              {
+                "to": "payments",
+                "on": [
+                  [
+                    "order_id",
+                    "order_id"
+                  ]
+                ],
+                "where": {
+                  "col": "payment_status",
+                  "in": [
+                    "succeeded"
+                  ]
+                }
+              }
+            ]
+          },
+          "op": "eq",
+          "value": 0
+        },
+        {
+          "count": {
+            "path": [
+              {
+                "to": "shipments",
+                "on": [
+                  [
+                    "order_id",
+                    "order_id"
+                  ]
+                ]
+              }
+            ]
+          },
+          "op": "eq",
+          "value": 0
+        }
+      ],
+      "description": "결제 대기 주문은 성공 결제·출고 없음. 경과 일수로 판정하지 않음 (규칙 8)"
+    },
+    {
+      "id": "R08_shipped_le_ordered",
+      "type": "cumulative_le",
+      "enabled": true,
+      "anchor": "order_items",
+      "limit": {
+        "col": "quantity"
+      },
+      "total": {
+        "sum": {
+          "path": [
+            {
+              "to": "shipment_items",
+              "on": [
+                [
+                  "order_item_id",
+                  "order_item_id"
+                ]
+              ]
+            },
+            {
+              "to": "shipments",
+              "on": [
+                [
+                  "shipment_id",
+                  "shipment_id"
+                ]
+              ],
+              "where": {
+                "col": "shipment_status",
+                "not_in": [
+                  "cancelled"
+                ]
+              }
+            }
+          ],
+          "col": "shipment_items.quantity"
+        }
+      },
+      "empty_child": "ok",
+      "description": "취소되지 않은 출고 배정 수량 합계 ≤ 주문 수량 (규칙 10)"
+    },
+    {
+      "id": "R09_returned_le_shipped",
+      "type": "cumulative_le",
+      "enabled": true,
+      "anchor": "shipment_items",
+      "limit": {
+        "col": "quantity"
+      },
+      "total": {
+        "sum": {
+          "path": [
+            {
+              "to": "return_items",
+              "on": [
+                [
+                  "shipment_item_id",
+                  "shipment_item_id"
+                ]
+              ]
+            },
+            {
+              "to": "returns",
+              "on": [
+                [
+                  "return_id",
+                  "return_id"
+                ]
+              ],
+              "where": {
+                "col": "return_status",
+                "not_in": [
+                  "rejected",
+                  "cancelled"
+                ]
+              }
+            }
+          ],
+          "col": "return_items.quantity"
+        }
+      },
+      "empty_child": "ok",
+      "description": "거절·취소를 제외한 반품 누적 수량 ≤ 출고 수량 (규칙 11)"
+    },
+    {
+      "id": "R10_refund_le_payment",
+      "type": "cumulative_le",
+      "enabled": true,
+      "anchor": "payments",
+      "when": {
+        "col": "payment_status",
+        "in": [
+          "succeeded"
+        ]
+      },
+      "limit": {
+        "col": "amount"
+      },
+      "total": {
+        "sum": {
+          "path": [
+            {
+              "to": "refunds",
+              "on": [
+                [
+                  "payment_id",
+                  "payment_id"
+                ]
+              ],
+              "where": {
+                "col": "refund_status",
+                "in": [
+                  "succeeded"
+                ]
+              }
+            }
+          ],
+          "col": "amount"
+        }
+      },
+      "empty_child": "ok",
+      "description": "성공 환불 합계 ≤ 원결제액. 실패 환불 제외, 반품 없는 출고 전 전체 취소 환불도 포함해 합산 (규칙 14·15)"
+    }
+  ]
+}
