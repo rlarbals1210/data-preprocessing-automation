@@ -21,8 +21,8 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from diagnostics.engine import read_table
 from prep.guard import Guard
+from prep.sheets import coordinate, read_source
 
 EXTRAS = "__extras_digest__"
 ABSENT = "\0absent"
@@ -44,6 +44,7 @@ class ViewInput:
     encoding: str = "utf-8-sig"
     delimiter: str = ","
     name: str = ""
+    options: dict | None = None  # 업로드 항목 읽기 조건(xlsx면 {format, sheet}). 없으면 CSV(encoding·delimiter)
 
 
 @dataclass
@@ -74,7 +75,8 @@ def build_view(inputs: list[ViewInput], folder: Path, guard: Guard, required: di
     for table, group in by_table.items():
         loaded = []
         for inp in group:
-            data = read_table(guard.check(inp.path), inp.encoding, inp.delimiter)
+            options = inp.options or {"encoding": inp.encoding, "delimiter": inp.delimiter}
+            data = read_source(guard.check(inp.path), options)
             if set(inp.columns) != set(data["headers"]):
                 raise ViewError(f"{inp.name or inp.item_id}: 매핑의 원래 컬럼이 파일 헤더와 다르다")
             loaded.append((inp, data))
@@ -111,8 +113,11 @@ def build_view(inputs: list[ViewInput], folder: Path, guard: Guard, required: di
                     payload = [tkey] + [[n, extras.get(n, ABSENT)] for n in extra_names]
                     values.append(hashlib.sha256(json.dumps(payload, ensure_ascii=False).encode()).hexdigest()[:24])
                 rows_out.append(values)
-                lineage_rows.append({"record": view_record, "item_id": inp.item_id, "source_record": row["record"],
-                                     "line_start": row["line_start"], "line_end": row["line_end"], "extras": extras})
+                entry = {"record": view_record, "item_id": inp.item_id, "source_record": row["record"],
+                         "line_start": row["line_start"], "line_end": row["line_end"], "extras": extras}
+                if row.get("sheet_row") is not None:  # 엑셀: 시트·행 번호와 원래 셀 자료형(텍스트 외)
+                    entry |= {"sheet": row["sheet"], "sheet_row": row["sheet_row"], "types": row.get("types", {})}
+                lineage_rows.append(entry)
         buf = io.StringIO()
         csv.writer(buf, lineterminator="\n").writerows(rows_out)
         guard.safe_join(folder, f"{table}.csv").write_text(buf.getvalue(), encoding="utf-8")
@@ -120,7 +125,8 @@ def build_view(inputs: list[ViewInput], folder: Path, guard: Guard, required: di
             "columns": {c: {str(inp.item_id): next((h for h, v in inp.columns.items() if v == c), None)
                             for inp, _ in loaded} for c in order},
             "items": [{"item_id": inp.item_id, "name": inp.name, "order_no": inp.order_no,
-                       "extra_columns": [h for h, v in inp.columns.items() if v is None]} for inp, _ in loaded],
+                       "headers": data["headers"],
+                       "extra_columns": [h for h, v in inp.columns.items() if v is None]} for inp, data in loaded],
             "extra_columns": extra_names,
             "rows": lineage_rows,
             "absent": absent,
@@ -146,17 +152,24 @@ class Locator:
         self.tables = lineage["tables"]
         self._rows = {t: {r["record"]: r for r in spec["rows"]} for t, spec in self.tables.items()}
         self._absent = {t: {(r, c) for r, c in spec["absent"]} for t, spec in self.tables.items()}
+        self._headers = {(t, it["item_id"]): it.get("headers", []) for t, spec in self.tables.items()
+                         for it in spec.get("items", [])}
 
     def source(self, table: str, record: int, columns: list[str] | None = None) -> dict:
         row = self._rows[table][record]
         cols = [c for c in (columns or []) if c != EXTRAS]
         mapping = self.tables[table]["columns"]
-        return {
+        out = {
             "item_id": row["item_id"], "record": row["source_record"],
             "line_start": row["line_start"], "line_end": row["line_end"],
             "columns": {c: mapping.get(c, {}).get(str(row["item_id"])) for c in cols},
             "absent": [c for c in cols if (record, c) in self._absent[table]],
         }
+        if row.get("sheet_row") is not None:  # 엑셀 원본 위치: 시트·행·셀 좌표(CSV 줄 번호를 붙이지 않음)
+            headers = self._headers.get((table, row["item_id"]), [])
+            out |= {"sheet": row["sheet"], "sheet_row": row["sheet_row"],
+                    "cells": {c: coordinate(headers, out["columns"][c], row["sheet_row"]) for c in cols}}
+        return out
 
     def translate_report(self, report: dict) -> dict:
         """진단 결과의 모든 위치에 원본 위치를 붙이고 보조 컬럼을 지운다(사본을 돌려준다)."""

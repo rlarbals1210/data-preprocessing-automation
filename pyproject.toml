@@ -5,6 +5,7 @@ description = "여러 담당자가 만든 쇼핑몰 데이터를 승인 기반�
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.115",
+    "openpyxl>=3.1.5",
     "python-multipart>=0.0.9",
     "uvicorn>=0.30",
 ]

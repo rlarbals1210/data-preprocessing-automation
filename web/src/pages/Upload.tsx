@@ -57,7 +57,14 @@ export default function Upload() {
               data={(sets.data ?? [{ id: 'shop', label: '쇼핑몰 표준' }]).map((s) => ({ value: s.id, label: s.label }))}
             />
           </Group>
-          <Dropzone onDrop={add} accept={{ 'text/csv': ['.csv'] }} multiple>
+          <Dropzone
+            onDrop={add}
+            accept={{
+              'text/csv': ['.csv'],
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+            }}
+            multiple
+          >
             <Stack align="center" gap={6} py="xl" style={{ pointerEvents: 'none' }}>
               <Dropzone.Accept>
                 <IconUpload size={40} />
@@ -68,7 +75,7 @@ export default function Upload() {
               <Dropzone.Idle>
                 <IconFileTypeCsv size={40} stroke={1.4} />
               </Dropzone.Idle>
-              <Text fw={600}>CSV</Text>
+              <Text fw={600}>CSV · xlsx</Text>
             </Stack>
           </Dropzone>
           {files.length > 0 && (

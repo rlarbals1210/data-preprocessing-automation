@@ -79,14 +79,15 @@ def write_files(attempt: Attempt, lineage: dict, tables: dict, names: dict[int, 
                                        "column": e, "extra": True})
         changes = json.loads((attempt.engine / "changes.json").read_text(encoding="utf-8"))
         rows = [["table", "file", "source_record", "line_start", "line_end", "column", "original_column", "before",
-                 "after", "logical_after", "codes"]]
+                 "after", "logical_after", "codes", "sheet", "cell"]]  # 엑셀은 줄 번호 대신 시트·셀 좌표
         for c in loc.translate_changes(changes):
             if c["table"] in excluded:
                 continue
             s = c["source"]
             rows.append([c["table"], names.get(s["item_id"], ""), s["record"], s["line_start"], s["line_end"],
                          c["column"], s["columns"].get(c["column"]) or "", c["before"], c["after"],
-                         json.dumps(c["logical_after"], ensure_ascii=False), ",".join(c["codes"])])
+                         json.dumps(c["logical_after"], ensure_ascii=False), ",".join(c["codes"]),
+                         s.get("sheet") or "", (s.get("cells") or {}).get(c["column"]) or ""])
         body = _csv(rows)
         (stage / "changes.csv").write_bytes(body)
         files["changes.csv"] = {"sha256": _sha(body), "rows": len(rows) - 1}

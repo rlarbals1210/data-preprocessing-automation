@@ -160,7 +160,15 @@ export default function Mapping({ run }: { run: Run }) {
             <Card key={f.item_id} withBorder>
               <Group justify="space-between" mb="xs" wrap="nowrap">
                 <div>
-                  <Text fw={600}>{f.name}</Text>
+                  <Text fw={600}>
+                    {f.name}
+                    {f.sheet && (
+                      <Text span c="dimmed" fw={500}>
+                        {' '}
+                        · {f.sheet}
+                      </Text>
+                    )}
+                  </Text>
                   <Text fz="sm" c="dimmed">
                     {fmt(f.rows)}행 · {f.headers.length}열
                     {d.proposal?.table.basis && ` · ${TABLE_BASIS[d.proposal.table.basis]}`}
@@ -179,8 +187,15 @@ export default function Mapping({ run }: { run: Run }) {
                 )}
               </Group>
               {f.read_error ? (
-                <Alert color="red" p="xs">
-                  {f.read_error}
+                <Alert color="red" p="xs" data-testid="read-error">
+                  {(f.read_errors?.length ?? 0) > 1
+                    ? f.read_errors!.map((e, i) => (
+                        <Text key={i} fz="sm">
+                          {e.cell ? `${e.cell}: ` : ''}
+                          {e.reason}
+                        </Text>
+                      ))
+                    : f.read_error}
                 </Alert>
               ) : !cat ? (
                 <Text fz="sm" ff="monospace">

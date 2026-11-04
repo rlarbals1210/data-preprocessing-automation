@@ -100,8 +100,14 @@ export const REASON: Record<string, string> = {
 
 export const TABLE_BASIS: Record<string, string> = { name: '이름 일치', headers: '헤더 비율', user: '직접 선택' };
 
-export const where = (s?: { file: string | null; record: number; line_start: number; line_end: number } | null) =>
-  !s ? '' : `${s.file ?? ''} ${s.record}행 · ${s.line_start === s.line_end ? `${s.line_start}줄` : `${s.line_start}–${s.line_end}줄`}`;
+export const where = (
+  s?: { file: string | null; record: number; line_start: number | null; line_end: number | null; sheet?: string; sheet_row?: number } | null,
+) =>
+  !s
+    ? ''
+    : s.sheet
+      ? `${s.file ?? ''} [${s.sheet}] ${s.record}행 · 엑셀 ${s.sheet_row}행`
+      : `${s.file ?? ''} ${s.record}행 · ${s.line_start === s.line_end ? `${s.line_start}줄` : `${s.line_start}–${s.line_end}줄`}`;
 
 export const APPROVAL_KIND: Record<string, string> = { structure: '구조 승인', execution: '실행 승인' };
 const HASH_LABEL: Record<string, string> = {

@@ -25,9 +25,12 @@ function SourceModal({ runId, source, highlight, onClose }: { runId: string; sou
     queryKey: ['source', runId, source.item_id, source.record],
     queryFn: () => api.sourceRow(runId, source.item_id, source.record),
   });
-  const title = row.data
-    ? `${row.data.file} · ${row.data.record}행 · ${row.data.line_start === row.data.line_end ? row.data.line_start : `${row.data.line_start}–${row.data.line_end}`}줄`
-    : '원문';
+  const d = row.data;
+  const title = !d
+    ? '원문'
+    : d.sheet
+      ? `${d.file} · ${d.sheet} · ${d.record}행 · 엑셀 ${d.sheet_row}행`
+      : `${d.file} · ${d.record}행 · ${d.line_start === d.line_end ? d.line_start : `${d.line_start}–${d.line_end}`}줄`;
   return (
     <Modal opened onClose={onClose} title={title} size="lg" centered>
       {row.isLoading && <Loader size="sm" />}
@@ -37,6 +40,11 @@ function SourceModal({ runId, source, highlight, onClose }: { runId: string; sou
           <Table.Tbody>
             {row.data.cells.map((c) => (
               <Table.Tr key={c.original} bg={highlight.includes(c.original) ? 'yellow.1' : undefined}>
+                {d?.sheet && (
+                  <Table.Td c="dimmed" ff="monospace" fz="xs">
+                    {c.cell}
+                  </Table.Td>
+                )}
                 <Table.Td fw={600}>{c.original}</Table.Td>
                 <Table.Td ff="monospace" c="dimmed">
                   {c.logical ?? '—'}
@@ -48,6 +56,12 @@ function SourceModal({ runId, source, highlight, onClose }: { runId: string; sou
                     </Text>
                   ) : (
                     <Code style={{ whiteSpace: 'pre' }}>{c.value}</Code>
+                  )}
+                  {c.type && c.type !== 'text' && c.type !== 'empty' && (
+                    <Text span c="dimmed" fz="xs">
+                      {' '}
+                      {c.type}
+                    </Text>
                   )}
                 </Table.Td>
               </Table.Tr>

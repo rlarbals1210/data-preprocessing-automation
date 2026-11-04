@@ -30,6 +30,7 @@ from prep.integrity import provider_overrides
 from prep.mapping import Catalog, propose, validate_final
 from prep.plan import build_plan
 from prep.runs import ApprovalError, RunLedger
+from prep.sheets import SheetError, read_source
 from prep.snapshot import SnapshotError, create_snapshot, load_snapshot
 from prep.store import Store
 from prep.upload import BlobStore, UploadError, ingest
@@ -107,8 +108,7 @@ class Workspace:
 
     def _rows(self, f: dict) -> list[dict]:
         self.blobs.get(f["sha256"])
-        table = read_table(self.blobs.path(f["sha256"]), f["read_options"]["encoding"],
-                           f["read_options"]["delimiter"])
+        table = read_source(self.blobs.path(f["sha256"]), f["read_options"])
         return [r["values"] for r in table["rows"]]
 
     def save(self, run: dict) -> None:
@@ -148,20 +148,23 @@ class Workspace:
         cat = self._catalog({"snapshot": snapshot.hash}) if snapshot else None
         entries = []
         for item in uploaded["items"]:
-            f = {"item_id": item["id"], "name": item["filename"], "sha256": item["sha256"], "bytes": item["bytes"],
-                 "read_options": {"encoding": "utf-8-sig", "delimiter": ","}, "rows": item["rows"],
+            f = {"item_id": item["id"], "name": item["filename"], "sheet": item["sheet"], "sha256": item["sha256"],
+                 "bytes": item["bytes"], "read_options": item["read_options"], "rows": item["rows"],
                  "headers": item["headers"], "read_error": None, "proposal": None, "mapping": None,
                  "confirmed": False}
             if item["read_status"] != "ok":
                 e = item["read_errors"][0]
-                f["read_error"] = (f"{e['record']}번째 레코드: " if e.get("record") else "") + e["reason"]
+                where = f"{e['record']}번째 레코드: " if e.get("record") else (f"{e['cell']}: " if e.get("cell") else "")
+                f["read_error"] = where + e["reason"]
+                f["read_errors"] = item["read_errors"]  # 시트·셀 좌표·이유 전체(AC-02-2)
                 f["mapping"] = {"table": None, "columns": {}}
                 f["confirmed"] = True  # 읽기 실패 파일은 실행 대상에서 빠진다(AC-01-3)
             elif cat is None:
-                f["mapping"] = {"table": item["filename"][:-4], "columns": {h: h for h in item["headers"]}}
+                stem = item["filename"].rsplit(".", 1)[0] + (f"_{item['sheet']}" if item["sheet"] else "")
+                f["mapping"] = {"table": stem, "columns": {h: h for h in item["headers"]}}
                 f["confirmed"] = True  # 설정 없음: 프로파일만
             else:
-                f["proposal"] = propose(item["filename"], item["headers"], self._rows(f), cat)
+                f["proposal"] = propose(item["sheet"] or item["filename"], item["headers"], self._rows(f), cat)
                 f["mapping"] = _mapping_of(f["proposal"])
                 f["confirmed"] = False  # 구조 승인은 매번 사용자가 한다
             entries.append(f)
@@ -295,7 +298,8 @@ class Workspace:
             _remove_tree(view_dir)
         cat = self._catalog(run)
         inputs = [ViewInput(f["item_id"], f["mapping"]["table"], self.blobs.path(f["sha256"]), f["mapping"]["columns"],
-                            order, f["read_options"]["encoding"], f["read_options"]["delimiter"], f["name"])
+                            order, name=f["name"] + (f" [{f['sheet']}]" if f.get("sheet") else ""),
+                            options=f["read_options"])
                   for order, f in enumerate(readable, start=1)]
         for f in readable:
             self.blobs.get(f["sha256"])  # 보관 원본 해시 대조
@@ -483,15 +487,21 @@ class Workspace:
         if f is None or f["read_error"]:
             raise FlowError("source_not_found", "원본 파일이 없다", 404)
         self.blobs.get(f["sha256"])
-        table = read_table(self.blobs.path(f["sha256"]), f["read_options"]["encoding"],
-                           f["read_options"]["delimiter"])
+        try:
+            table = read_source(self.blobs.path(f["sha256"]), f["read_options"])
+        except SheetError as exc:
+            raise FlowError("source_not_found", str(exc), 404) from exc
         if not 1 <= record <= len(table["rows"]):
             raise FlowError("source_not_found", "원본에 없는 레코드다", 404)
         row = table["rows"][record - 1]
         mapping = (f.get("mapping") or {}).get("columns") or {}
-        return {"file": f["name"], "item_id": item_id, "record": record, "line_start": row["line_start"],
-                "line_end": row["line_end"],
-                "cells": [{"original": h, "logical": mapping.get(h), "value": row["values"][h]}
+        from prep.sheets import coordinate
+        return {"file": f["name"], "sheet": f.get("sheet"), "item_id": item_id, "record": record,
+                "line_start": row["line_start"], "line_end": row["line_end"], "sheet_row": row.get("sheet_row"),
+                "cells": [{"original": h, "logical": mapping.get(h), "value": row["values"][h],
+                           "type": row.get("types", {}).get(h, "text" if row["values"][h] else "empty")
+                           if row.get("sheet_row") else None,
+                           "cell": coordinate(table["headers"], h, row.get("sheet_row"))}
                           for h in table["headers"]]}
 
     def _plan(self, run_id: str) -> dict:

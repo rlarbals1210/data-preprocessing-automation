@@ -18,6 +18,8 @@ export type Mapping = { table: string | null; columns: Record<string, string | n
 export type FileEntry = {
   item_id: number;
   name: string;
+  sheet?: string | null;
+  read_errors?: { sheet?: string; cell?: string | null; record?: number | null; reason: string }[];
   sha256: string;
   bytes: number;
   rows: number;
@@ -125,6 +127,9 @@ export type Source = {
   line_end: number;
   columns: Record<string, string | null>;
   absent: string[];
+  sheet?: string;
+  sheet_row?: number;
+  cells?: Record<string, string | null>;
 };
 export type Issue = {
   table: string;
@@ -175,11 +180,13 @@ export type Change = {
 export type Page<T> = { total: number; items: T[] };
 export type SourceRow = {
   file: string;
+  sheet: string | null;
   item_id: number;
   record: number;
-  line_start: number;
-  line_end: number;
-  cells: { original: string; logical: string | null; value: string }[];
+  line_start: number | null;
+  line_end: number | null;
+  sheet_row: number | null;
+  cells: { original: string; logical: string | null; value: string; type: string | null; cell: string | null }[];
 };
 export type DuplicateGroup = {
   id: string;
