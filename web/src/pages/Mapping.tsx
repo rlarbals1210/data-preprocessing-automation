@@ -40,7 +40,6 @@ export default function Mapping({ run }: { run: Run }) {
     return new Set(Object.keys(c).filter((k) => c[k] > 1));
   };
   const blocking =
-    Object.values(tableCount).some((n) => n > 1) ||
     readable.some((f) => drafts[f.item_id].table && dupCols(drafts[f.item_id]).size > 0) ||
     !readable.some((f) => drafts[f.item_id].table);
   const pending = readable.reduce(
@@ -180,7 +179,7 @@ export default function Mapping({ run }: { run: Run }) {
                     value={d.table ?? EXCLUDE}
                     onChange={(v) => changeTable(f, v)}
                     data={[{ value: EXCLUDE, label: '제외' }, ...Object.keys(cat).map((t) => ({ value: t, label: t }))]}
-                    error={d.table && tableCount[d.table] > 1 ? '중복' : undefined}
+                    description={d.table && tableCount[d.table] > 1 ? `${tableCount[d.table]}개 파일·시트를 합침` : undefined}
                     allowDeselect={false}
                     styles={{ input: { fontFamily: 'monospace' } }}
                   />

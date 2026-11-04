@@ -250,9 +250,17 @@ class Workspace:
             errs = validate_final(table, columns, f["headers"], cat)
             errors += [f"{f['name']}: {e}" for e in errs]
             targets.append(table)
-        dup = sorted(t for t, n in Counter(targets).items() if n > 1)
-        if dup:
-            errors.append(f"같은 표준 테이블로 가는 파일이 여럿이다: {dup}")
+        # 여러 파일·시트를 같은 표준 테이블로 합칠 때(F02): 필수 컬럼이 없는 파일은 합치지 않는다(TD 5-3)
+        for table in sorted(t for t, n in Counter(targets).items() if n > 1):
+            for x in files:
+                if x.get("table") != table:
+                    continue
+                have = {v for v in (x.get("columns") or {}).values() if v}
+                lacking = [c for c in cat.required.get(table, []) if c not in have]
+                if lacking:
+                    f = by_id[x["item_id"]]
+                    label = f["name"] + (f" [{f['sheet']}]" if f.get("sheet") else "")
+                    errors.append(f"{label}: 필수 컬럼 {lacking}이 없어 {table}에 합칠 수 없다(제외하거나 매핑하세요)")
         if not targets:
             errors.append("실행 대상 파일이 없다")
         if errors:
@@ -289,10 +297,6 @@ class Workspace:
         readable = [f for f in run["files"] if f["read_error"] is None and f["mapping"]["table"]]
         if not readable:
             raise FlowError("nothing_readable", "진단할 파일이 없다")
-        tables = Counter(f["mapping"]["table"] for f in readable)
-        dup = [t for t, n in tables.items() if n > 1]
-        if dup:
-            raise FlowError("duplicate_table", f"같은 표준 테이블로 가는 파일이 여럿이다: {dup}")
         view_dir = self.guard.safe_join(base, "view")
         if view_dir.exists():
             _remove_tree(view_dir)
@@ -314,7 +318,10 @@ class Workspace:
         if run["snapshot"]:
             snap = self.guard.safe_join(self.root, "config-snapshots", run["snapshot"])
             logical = json.loads((snap / "config/sets/shop/logical-diagnostics.json").read_text(encoding="utf-8"))
-            present = {f["mapping"]["table"]: {v for v in f["mapping"]["columns"].values() if v} for f in readable}
+            present: dict[str, set[str]] = defaultdict(set)  # 같은 테이블로 합친 파일들의 논리 컬럼 합집합
+            for f in readable:
+                present[f["mapping"]["table"]] |= {v for v in f["mapping"]["columns"].values() if v}
+            present = dict(present)
             plan = build_plan(logical, present)  # M1-6
             config = plan["config"]
         (base / "apply-plan.json").unlink(missing_ok=True)  # 새 진단 → 이전 선택 무효

@@ -103,13 +103,15 @@ def test_same_name_files_kept_separately(client):
                     data={"set": "shop", "source": "s"})
     run = r.json()
     assert len({f["item_id"] for f in run["files"]}) == 2
-    bad = confirm(client, run)
-    assert bad.status_code == 400 and "같은 표준 테이블" in bad.json()["message"]
 
     def drop_second(files):
         files[1]["table"] = None  # 두 번째 파일은 실행 대상에서 제외
     assert confirm(client, run, drop_second).status_code == 200
-    assert client.post(f"/api/runs/{run['id']}/diagnose").status_code == 200
+    assert client.post(f"/api/runs/{run['id']}/diagnose").json()["rows_read"] == 15
+    # M4-6: 같은 표준 테이블로 합치면 두 항목의 행이 모두 남고 같은 키는 중복으로 진단된다(AC-02-4)
+    assert confirm(client, run).status_code == 200
+    d = client.post(f"/api/runs/{run['id']}/diagnose").json()
+    assert d["rows_read"] == 30 and d["duplicate_groups"] >= 15
 
 
 def test_mapping_edit_keeps_auto_proposal_and_invalidates(client):
