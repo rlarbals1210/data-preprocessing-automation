@@ -19,7 +19,7 @@ from pathlib import Path
 
 from diagnostics.engine import diagnose, read_table
 from prep import attempt as attempts
-from prep import publish
+from prep import publish, versions
 from prep.apply import ApplyError, build_apply_plan, group_id, verify_plan
 from prep.apply import candidates as apply_candidates
 from prep.apply import groups as apply_groups
@@ -51,7 +51,93 @@ class FlowError(ValueError):
         self.code, self.message, self.status = code, message, status
 
 
-class Workspace:
+class _VersionsMixin:
+    """출처별 결과 버전 이력·복원(M5, FS F08). Workspace에 섞어 쓴다."""
+
+    def _public_ids(self) -> dict[int, dict]:
+        out = {}
+        for p in self.runs.iterdir():
+            path = p / "run.json"
+            if RUN_ID.fullmatch(p.name) and path.is_file():
+                r = json.loads(path.read_text(encoding="utf-8"))
+                if "db_run" in r:
+                    out[r["db_run"]] = r
+        return out
+
+    def _version_view(self, v: dict, runs: dict[int, dict]) -> dict:
+        run = runs.get(v["run_id"], {})
+        result = run.get("result") or {}
+        base = versions.origin(self.store, v) if v["kind"] == "restore" else v
+        manifest = json.loads(self.guard.safe_join(self.root, v["manifest_path"]).read_text(encoding="utf-8"))
+        hashes = v["data_hashes"] if isinstance(v["data_hashes"], dict) else json.loads(v["data_hashes"])
+        return {"id": v["id"], "kind": v["kind"], "created_at": v["created_at"], "current": v.get("current", False),
+                "restored_from": v["restored_from"], "origin": base["id"], "run": run.get("id"),
+                "run_status": v["run_status"], "source_id": v["source_id"],
+                "changed_cells": result.get("changed_cells"), "not_approved": result.get("not_approved"),
+                "completeness": (run.get("plan") or {}).get("completeness"),
+                "integrity_after": result.get("integrity_after"),
+                "remaining": {k: (result.get("after") or {}).get(k, 0)
+                              for k in ("business_rule_violation", "human_review")},
+                "files": [{"name": n, "rows": m["rows"]} for n, m in manifest["files"].items()
+                          if n.endswith(".csv") and n != "changes.csv"],
+                "data_hash": versions_digest(hashes)}
+
+    def sources_summary(self) -> list[dict]:
+        out = []
+        for s in self.store.sources():
+            rows = versions.for_source(self.store, s["id"])
+            out.append({"id": s["id"], "name": s["name"], "versions": len(rows),
+                        "current_version": rows[-1]["id"] if rows else None,
+                        "current_kind": rows[-1]["kind"] if rows else None})
+        return out
+
+    def source_versions(self, source_id: int) -> list[dict]:
+        runs = self._public_ids()
+        return [self._version_view(v, runs) for v in versions.for_source(self.store, source_id)]
+
+    def version_detail(self, version_id: int) -> dict:
+        try:
+            v = versions.get(self.store, version_id)
+            rows = versions.for_source(self.store, v["source_id"])
+            v["current"] = rows[-1]["id"] == v["id"]
+            out = self._version_view(v, self._public_ids())
+            out["refs"] = versions.refs(self.store, v)
+        except versions.VersionError as exc:
+            raise FlowError(exc.code, exc.message, exc.status) from exc
+        events = self.store.events("result_version", version_id)
+        out["events"] = [{"kind": e["kind"], "payload": e["payload"], "created_at": e["created_at"]} for e in events]
+        return out
+
+    def restore_version(self, version_id: int) -> dict:
+        try:
+            v = versions.restore(self.store, version_id)
+        except versions.VersionError as exc:
+            raise FlowError(exc.code, exc.message, exc.status) from exc
+        return self.version_detail(v["id"])
+
+    def version_file(self, version_id: int, name: str) -> bytes:
+        try:
+            v = versions.get(self.store, version_id)
+        except versions.VersionError as exc:
+            raise FlowError(exc.code, exc.message, exc.status) from exc
+        if not (FILE_NAME.fullmatch(name) or name in EVIDENCE_FILES):
+            raise FlowError("file_not_found", "파일이 없다", 404)
+        try:
+            return publish.read_verified(self.guard, self.root, v, name)  # 해시 재대조
+        except FileNotFoundError as exc:
+            raise FlowError("file_not_found", "파일이 없다", 404) from exc
+        except publish.PublishError as exc:
+            raise FlowError("result_tampered", str(exc), 409) from exc
+
+
+def versions_digest(hashes: dict) -> str:
+    """버전 데이터 해시(파일 이름·해시 목록의 해시). 복원 버전은 원래 버전과 같다(AC-08-2)."""
+    import hashlib
+
+    return hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
+
+
+class Workspace(_VersionsMixin):
     def __init__(self, root: Path):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)

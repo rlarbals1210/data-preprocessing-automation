@@ -142,8 +142,9 @@ def record(store: Store, run_id: int, attempt: Attempt, manifest: dict, status: 
 
 
 def latest(store: Store, run_id: int) -> dict | None:
-    r = store.conn.execute("SELECT * FROM result_version WHERE run_id = ? ORDER BY id DESC LIMIT 1",
-                           (run_id,)).fetchone()
+    """그 실행이 발행한 정제 결과 버전. 복원 버전(M5)은 실행이 아니라 출처 이력에 속하므로 여기서 보지 않는다."""
+    r = store.conn.execute("SELECT * FROM result_version WHERE run_id = ? AND kind = 'cleaned' ORDER BY id DESC "
+                           "LIMIT 1", (run_id,)).fetchone()
     return None if r is None else dict(r)
 
 

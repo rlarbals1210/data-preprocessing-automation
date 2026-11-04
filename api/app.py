@@ -57,7 +57,26 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
 
     @app.get("/api/sources")
     def sources():
-        return [{"id": s["id"], "name": s["name"]} for s in ws.store.sources()]
+        return ws.sources_summary()
+
+    @app.get("/api/sources/{source_id}/versions")
+    def source_versions(source_id: int):
+        return ws.source_versions(source_id)
+
+    @app.get("/api/versions/{version_id}")
+    def version(version_id: int):
+        return ws.version_detail(version_id)
+
+    @app.post("/api/versions/{version_id}/restore")
+    def restore(version_id: int):
+        return ws.restore_version(version_id)
+
+    @app.get("/api/versions/{version_id}/files/{name}")
+    def version_file(version_id: int, name: str):
+        data = ws.version_file(version_id, name)
+        kind = "application/json" if name.endswith(".json") else "text/csv; charset=utf-8"
+        return Response(data, media_type=kind,
+                        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(name)}"})
 
     @app.get("/api/runs/{run_id}")
     def run(run_id: str):
