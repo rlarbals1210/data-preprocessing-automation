@@ -298,6 +298,7 @@ T-05(AC-04-1·04-2): 개발용 한글 헤더 입력과 같은 내용을 영문 �
 - `result_version`은 시도 폴더의 결과(정제 CSV·`changes`·`before/after`·`integrity`·`held`·`absent-cells`·`manifest`)와 매핑 버전·실행 계획·뷰·적용 계획·설정 스냅샷을 참조한다.
 - 복원: `result_version(kind=restore, restored_from=X)`를 만들고 데이터·근거는 모두 X를 참조한다. `changes`를 새로 만들지 않고, 복원은 `event(subject_type=result_version)`에 남긴다. 현재 규칙으로 다시 계산한 점수를 붙이지 않는다.
 - 스키마 비교 기준은 업로드 실행의 결과만 대상으로 하며 `kind=restore`는 제외한다(AC-08-4).
+- **구현(M5, `prep/versions.py`):** 복원 행의 `run_id`는 선택한 버전의 실행, `data_hashes`·`manifest_path`는 선택한 버전과 같다. 복원의 복원은 `restored_from`이 선택한 복원 버전을 가리키고 근거는 원래 정제 버전(origin)까지 따라가 조회한다. 출처의 현재 결과 = 그 출처 실행들의 마지막 버전 행. 실행 결과 화면·다운로드(`/runs/{id}/…`)는 그 실행의 정제 버전만 보고, 버전 이력은 `/sources/{id}/versions`·`/versions/{id}`(내려받기 해시 재대조, 복원 `POST /versions/{id}/restore`)로 본다.
 
 ### 10-2. 재사용 규칙 (F09)
 - **형태 서명:** 숫자→`9`, 한글→`가`, 영문→`a`, 기호·공백 그대로, 같은 문자 연속은 하나로. 서로 다른 값이 같은 서명을 가질 수 있으므로 **엔진이 다시 검증한 유효 후보 안에서만** 미리 선택에 쓴다.

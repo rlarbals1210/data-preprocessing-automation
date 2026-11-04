@@ -1,6 +1,7 @@
 import { AppShell, Group, NavLink, Text, ThemeIcon } from '@mantine/core';
 import { IconChartBar, IconHistory, IconHome, IconRecycle, IconTable, IconUpload } from '@tabler/icons-react';
 import { Link, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import History from './pages/History';
 import Home from './pages/Home';
 import RunPage from './pages/Run';
 import Upload from './pages/Upload';
@@ -8,7 +9,7 @@ import Upload from './pages/Upload';
 const NAV = [
   { to: '/', label: '홈', icon: IconHome },
   { to: '/upload', label: '새 업로드', icon: IconUpload },
-  { to: '/history', label: '실행 이력', icon: IconHistory, disabled: true },
+  { to: '/history', label: '실행 이력', icon: IconHistory },
   { to: '/reuse', label: '재사용 규칙', icon: IconRecycle, disabled: true },
   { to: '/quality', label: '품질 대시보드', icon: IconChartBar, disabled: true },
 ];
@@ -42,6 +43,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/upload" element={<Upload />} />
+          <Route path="/history" element={<History />} />
           <Route path="/runs/:id/*" element={<RunPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

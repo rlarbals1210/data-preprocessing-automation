@@ -78,6 +78,41 @@ export type Approval = {
   invalidated_at: string | null;
   invalidated_reason: string | null;
 };
+export type SourceSummary = {
+  id: number;
+  name: string;
+  versions: number;
+  current_version: number | null;
+  current_kind: 'cleaned' | 'restore' | null;
+};
+export type ResultVersion = {
+  id: number;
+  kind: 'cleaned' | 'restore';
+  created_at: string;
+  current: boolean;
+  restored_from: number | null;
+  origin: number;
+  run: string | null;
+  run_status: RunStatus;
+  source_id: number;
+  changed_cells: number | null;
+  not_approved: number | null;
+  completeness: 'full' | 'partial' | null;
+  integrity_after: number | null;
+  remaining: { business_rule_violation: number; human_review: number };
+  files: { name: string; rows: number }[];
+  data_hash: string;
+};
+export type VersionDetail = ResultVersion & {
+  refs: {
+    origin: number;
+    config_snapshot: string | null;
+    mapping_version: { version: number; hash: string } | null;
+    approval_id: number | null;
+    approval_hashes: Record<string, string>;
+  };
+  events: { kind: string; payload: Record<string, unknown>; created_at: string }[];
+};
 export type RunListItem = Pick<Run, 'id' | 'created_at' | 'set' | 'source' | 'status' | 'rows' | 'result' | 'retry_of' | 'retried_by'> & { file_count: number };
 export type SkippedRule = { table: string; kind: string; columns: string[]; target?: string; reason: string };
 export type TablePlan = { diagnosable: boolean; publishable: boolean; missing_required: string[]; reason: string | null };
@@ -235,7 +270,11 @@ const q = (params: Record<string, string | number | undefined | null>) => {
 export const api = {
   sets: () => req<{ id: string; label: string }[]>('/sets'),
   runs: () => req<RunListItem[]>('/runs'),
-  sources: () => req<{ id: number; name: string }[]>('/sources'),
+  sources: () => req<SourceSummary[]>('/sources'),
+  sourceVersions: (sid: number) => req<ResultVersion[]>(`/sources/${sid}/versions`),
+  version: (vid: number) => req<VersionDetail>(`/versions/${vid}`),
+  restore: (vid: number) => req<VersionDetail>(`/versions/${vid}/restore`, { method: 'POST' }),
+  versionFileUrl: (vid: number, name: string) => `/api/versions/${vid}/files/${encodeURIComponent(name)}`,
   createRun: (files: File[], set: string, source: string) => {
     const form = new FormData();
     files.forEach((f) => form.append('files', f, f.name));

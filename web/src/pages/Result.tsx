@@ -142,6 +142,11 @@ export default function Result({ run }: { run: Run }) {
             시도 {x.attempt}
           </Badge>
         )}
+        {x.result_version && (
+          <Anchor component={Link} to="/history" fz="sm">
+            실행 이력
+          </Anchor>
+        )}
         {x.audit?.passed && (
           <Badge size="lg" variant="light" color="teal">
             전체 셀 대조 통과 · {fmt(x.audit.checked_cells)}셀
