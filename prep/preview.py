@@ -19,7 +19,7 @@ from pathlib import Path
 
 from diagnostics.engine import diagnose, read_table
 from prep import attempt as attempts
-from prep import publish, reuse, templates, versions
+from prep import metrics, publish, reuse, templates, versions
 from prep.apply import ApplyError, build_apply_plan, group_id, verify_plan
 from prep.apply import candidates as apply_candidates
 from prep.apply import groups as apply_groups
@@ -137,7 +137,9 @@ def versions_digest(hashes: dict) -> str:
 
 
 class Workspace(_VersionsMixin, DriftMixin, ReuseMixin):
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, reuse_enabled: bool = True):
+        """reuse_enabled=False: 재사용 규칙으로 미리 선택·자동 제안하지 않는 비교 조건(④ 6-1 ①, M6-8). 기록은 그대로."""
+        self.reuse_enabled = reuse_enabled
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.guard = Guard([self.root], project_root=PROJECT_ROOT)
@@ -641,19 +643,32 @@ class Workspace(_VersionsMixin, DriftMixin, ReuseMixin):
             self._transition(run, "awaiting_approval")
         approved = set(plan["approved_groups"])
         excluded = {tuple(k) for k in plan["excluded_cells"]}
-        marks, _ = self._reuse_marks(run, cells)
         out = []
-        for g in apply_groups(cells, held):
+        for g in self._groups_with_reuse(run, cells, held):
             n = sum(1 for k in excluded if k in cells and g["code"] in cells[k]["codes"]
                     and group_id(k[0], k[2], g["code"]) == g["id"])
-            r = sum(1 for k in marks if g["code"] in cells[k]["codes"] and group_id(k[0], k[2], g["code"]) == g["id"])
-            out.append(g | {"approved": g["id"] in approved, "excluded": n, "reuse": r})
+            out.append(g | {"approved": g["id"] in approved, "excluded": n})
         tables = (run.get("plan") or {}).get("tables", {})
         return {"groups": out, "total_cells": plan["counts"]["allowed"], "candidates": plan["counts"]["candidates"],
                 "held": plan["counts"]["held"], "not_approved": plan["counts"]["not_approved"],
                 "excluded_cells": plan["excluded_cells"], "plan_hash": plan["hash"], "view_hash": plan["view_hash"],
                 "not_publishable": {t: v["reason"] for t, v in sorted(tables.items()) if not v["publishable"]},
                 "approval": self.ledger.current_hashes(run["db_run"])}
+
+    def _groups_with_reuse(self, run: dict, cells: dict, held: dict) -> list[dict]:
+        """규칙 묶음 + 재사용 규칙과 맞는 셀 수(`reuse`, M6-6b)."""
+        marks, _ = self._reuse_marks(run, cells)
+        return [g | {"reuse": sum(1 for k in marks if g["code"] in cells[k]["codes"]
+                                  and group_id(k[0], k[2], g["code"]) == g["id"])} for g in apply_groups(cells, held)]
+
+    def _record_metrics(self, run: dict, report: dict) -> None:
+        """④ 6-1 검토 항목을 실행 승인 때 한 번 기록한다(M6-8)."""
+        cells, held = apply_candidates(report, self._blocked(run["id"]))
+        proposals = {f["item_id"]: f["proposal"] for f in run["files"]
+                     if f["proposal"] and not f["read_error"] and f["mapping"]["table"]}
+        items, inputs = metrics.review_items(proposals, self._groups_with_reuse(run, cells, held), report,
+                                             len(held), self._integrity(run["id"]))
+        metrics.record(self.store, run["db_run"], items, inputs | {"reuse": self.reuse_enabled})
 
     def preview_cells(self, run_id: str, gid: str, offset: int, limit: int) -> dict:
         """묶음 하나의 셀 목록(SC07): 원본 위치·전후 값·제외 여부, 보류 셀은 막는 위반·검토(AC-06-2)."""
@@ -727,6 +742,7 @@ class Workspace(_VersionsMixin, DriftMixin, ReuseMixin):
         except (SnapshotError, ApplyError) as exc:
             raise FlowError("stale_plan", str(exc), 409) from exc
         reuse_approval = reuse.record(self.store, run["db_run"], reuse_rules, self.ledger.current_hashes(run["db_run"]))
+        self._record_metrics(run, report)  # M6-8: 이 실행이 보여 준 검토 항목(④ 6-1)
         config = json.loads((base / "engine-config.json").read_text(encoding="utf-8"))
         view = self.guard.safe_join(base, "view")
         attempt = attempts.start(self.store, self.guard, run["db_run"], base, approval)  # M1-10b 새 시도 폴더

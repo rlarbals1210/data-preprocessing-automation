@@ -52,7 +52,7 @@ def _mapping_rule(store, template_id: int) -> dict | None:
 class ReuseMixin:
     def _apply_mapping_reuse(self, run: dict) -> None:
         d, cat = run.get("drift"), self._catalog(run)
-        if not d or cat is None:
+        if not d or cat is None or not self.reuse_enabled:
             return
         for f in run["files"]:
             e = d["items"].get(str(f["item_id"]))
@@ -69,6 +69,8 @@ class ReuseMixin:
                             "columns": {c["original"]: c["logical"] for c in f["proposal"]["columns"]}}
 
     def _mapping_impacts(self, run: dict, files: list[dict]) -> list[dict]:
+        if not self.reuse_enabled:
+            return []
         source = self._source_of(run)
         by_id = {f["item_id"]: f for f in run["files"]}
         out = []
@@ -113,7 +115,7 @@ class ReuseMixin:
         효력 있는 표준화 규칙이 없는 양식의 항목은 빠진다(기본 전체 선택)."""
         cat = self._catalog(run)
         links = templates.for_run(self.store, run["db_run"])
-        if cat is None or not links:
+        if cat is None or not links or not self.reuse_enabled:
             return {}
         config = self.ledger.config_hash(run["db_run"])
         items = (run.get("drift") or {}).get("items", {})

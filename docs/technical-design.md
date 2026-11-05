@@ -123,7 +123,7 @@
 | approval | id, run_id, kind(structure/execution/reuse), subject_id, input_hash, mapping_hash, plan_hash, view_hash, candidate_hash, apply_hash, config_hash, created_at, invalidated_at, invalidated_reason | |
 | attempt | id, run_id, path, started_at, ended_at, outcome | 엔진 정제 시도 폴더(완료 판정 아님) |
 | result_version | id, run_id(nullable), kind(cleaned/restore), restored_from, attempt_id, data_hashes(json), manifest_path, created_at | **완료 판정의 유일한 기준** |
-| run_metrics | run_id, review_items(json), inputs(json) | F09 검토 항목 수와 계산 근거 |
+| run_metrics | run_id, review_items(json), inputs(json), created_at | F09 검토 항목 수와 계산 근거. 실행 승인 때 한 번, 덧붙이기만(M6-8, DB 7). review_items = mapping·groups·human_review·business_groups·held·total |
 | reuse_rule | id, template_id, kind(mapping/standardize), rule_key, version, spec(json), transform_id, config_hash, approval_id(같은 실행의 reuse 승인), approved_in_run, approved_at, revoked_at, revoked_reason | 키(양식·종류·rule_key)마다 버전. 취소 표시만 한 번(M6-5) |
 | masking_config | id, template_id, version, decisions(json), confirmed_at | 템플릿별 결정 |
 | masking_snapshot | id, result_version_id, decisions(json: 템플릿·표준 테이블·컬럼 키별), hash, created_at | 한 번의 공유에 쓴 전체 결정 |

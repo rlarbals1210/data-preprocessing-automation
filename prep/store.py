@@ -421,6 +421,19 @@ MIGRATIONS.append(
     END;
     """)
 
+MIGRATIONS.append(
+    # 7: M6-8 검토 항목 기록(④ 6-1) — 실행 승인 때 한 번, 덧붙이기만
+    f"""
+    CREATE TABLE run_metrics (
+        run_id INTEGER PRIMARY KEY REFERENCES run(id),
+        review_items TEXT NOT NULL CHECK (json_valid(review_items) AND json_type(review_items) = 'object'),
+        inputs TEXT NOT NULL CHECK (json_valid(inputs) AND json_type(inputs) = 'object'),
+        created_at TEXT NOT NULL DEFAULT {_NOW});
+
+    {_guards(("run_metrics",), ("run_metrics",))}
+    """)
+
+
 
 class StoreError(RuntimeError):
     pass
