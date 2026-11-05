@@ -613,12 +613,16 @@ class Workspace(_VersionsMixin, DriftMixin, ReuseMixin):
                           for h in table["headers"]]}
 
     def _plan(self, run_id: str) -> dict:
-        """저장된 적용 계획(없으면 전체 승인 기본값을 만들어 DB에 기록). M1-9·M1-10a."""
+        """저장된 적용 계획(없으면 기본 선택을 만들어 DB에 기록 — 전체 승인, 재사용 규칙이 있으면 M6-D4). M1-9·M1-10a."""
         run, report = self.load(run_id), self._report(run_id)
         path = self.run_dir(run_id) / "apply-plan.json"
         if path.is_file():
             return json.loads(path.read_text(encoding="utf-8"))
-        plan = build_apply_plan(report, run["view_hash"], extra_blocked=self._blocked(run_id))
+        blocked = self._blocked(run_id)
+        selection = None
+        if run["status"] not in FINISHED:  # M6-D4: 재사용 표준화 규칙이 있는 양식은 규칙과 맞는 셀만 미리 선택
+            selection = self._default_selection(run, apply_candidates(report, blocked)[0])
+        plan = build_apply_plan(report, run["view_hash"], selection, extra_blocked=blocked)
         if run["status"] not in FINISHED:
             self._store_plan(run, plan)
         return plan
@@ -637,11 +641,13 @@ class Workspace(_VersionsMixin, DriftMixin, ReuseMixin):
             self._transition(run, "awaiting_approval")
         approved = set(plan["approved_groups"])
         excluded = {tuple(k) for k in plan["excluded_cells"]}
+        marks, _ = self._reuse_marks(run, cells)
         out = []
         for g in apply_groups(cells, held):
             n = sum(1 for k in excluded if k in cells and g["code"] in cells[k]["codes"]
                     and group_id(k[0], k[2], g["code"]) == g["id"])
-            out.append(g | {"approved": g["id"] in approved, "excluded": n})
+            r = sum(1 for k in marks if g["code"] in cells[k]["codes"] and group_id(k[0], k[2], g["code"]) == g["id"])
+            out.append(g | {"approved": g["id"] in approved, "excluded": n, "reuse": r})
         tables = (run.get("plan") or {}).get("tables", {})
         return {"groups": out, "total_cells": plan["counts"]["allowed"], "candidates": plan["counts"]["candidates"],
                 "held": plan["counts"]["held"], "not_approved": plan["counts"]["not_approved"],
@@ -656,7 +662,9 @@ class Workspace(_VersionsMixin, DriftMixin, ReuseMixin):
         cells, held = apply_candidates(report, blocked)
         plan = self._plan(run_id)
         excluded = {tuple(k) for k in plan["excluded_cells"]}
-        names = {f["item_id"]: f["name"] for f in self.load(run_id)["files"]}
+        run = self.load(run_id)
+        names = {f["item_id"]: f["name"] for f in run["files"]}
+        marks, _ = self._reuse_marks(run, cells)
         rows = []
         for bucket, is_held in ((cells, False), (held, True)):
             for key, v in bucket.items():
@@ -679,7 +687,7 @@ class Workspace(_VersionsMixin, DriftMixin, ReuseMixin):
             items.append({"cell": list(key), "before": v["before"], "after": "" if v["after"] is None else v["after"],
                           "null": v["after"] is None, "codes": v["codes"],
                           "source": source | {"file": names.get(source.get("item_id"))} if source else None,
-                          "held": is_held, "excluded": key in excluded,
+                          "held": is_held, "excluded": key in excluded, "reuse": key in marks,
                           "reasons": blocking.get(key, []) if is_held else []})
         return {"total": len(rows), "held": sum(1 for r in rows if r[2]), "items": items}
 

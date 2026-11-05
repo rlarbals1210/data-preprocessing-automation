@@ -71,6 +71,11 @@ function GroupCells({
                 </Group>
               </Table.Td>
               <Table.Td>
+                {c.reuse && !c.held && (
+                  <Badge size="sm" color="grape" variant="light" data-testid="cell-reuse">
+                    재사용 규칙
+                  </Badge>
+                )}
                 {c.held && (
                   <Group gap={4}>
                     <Badge size="sm" color="orange" variant="light">
@@ -232,6 +237,11 @@ export default function Preview({ run }: { run: Run }) {
                     <Badge variant="light" styles={{ root: { overflow: 'visible' }, label: { overflow: 'visible' } }}>
                       {CHANGE[g.code] ?? CODE[g.code] ?? g.code}
                     </Badge>
+                    {g.reuse > 0 && (
+                      <Badge ml={6} color="grape" variant="light" data-testid="group-reuse">
+                        재사용 규칙 {fmt(g.reuse)}
+                      </Badge>
+                    )}
                   </Table.Td>
                   <Table.Td ta="right" style={{ whiteSpace: 'nowrap' }}>
                     {fmt(g.cells - (g.excluded ?? 0))}

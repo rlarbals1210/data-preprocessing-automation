@@ -233,6 +233,7 @@ export type PreviewGroup = {
   code: string;
   cells: number;
   excluded: number;
+  reuse: number;
   examples: { before: string; after: string }[];
 };
 export type Cell = [string, number, string];
@@ -288,6 +289,7 @@ export type GroupCell = {
   source: Source | null;
   held: boolean;
   excluded: boolean;
+  reuse: boolean;
   reasons: { category: Category; code: string }[];
 };
 

@@ -309,6 +309,7 @@ T-05(AC-04-1·04-2): 개발용 한글 헤더 입력과 같은 내용을 영문 �
 - 승인 취소는 준비 중인 실행의 미리 선택을 해제하고 해당 실행 승인을 무효로 한다.
 - 서명의 효과·오수정·검토 감소 평가는 ④.
 - **구현(M6-5, `prep/reuse.py`):** 최종 확인(`POST /runs/{id}/execute`의 `reuse: {groups, mappings}`) 때 실행 승인과 별개로 `approval(kind=reuse)` 한 행과 규칙 행을 기록한다(승인하지 않은 묶음·적용 셀이 없는 묶음·실행 대상이 아닌 파일은 실행 승인 전에 400 `bad_reuse`). 표준화 규칙: rule_key = 묶음 ID(테이블.컬럼.진단 코드), 변환 ID = 진단 코드(`type`·`pattern`이면 `:컬럼 표준화 정책`), 서명 = 허용 셀 원문의 형태 서명 집합(양식별로 나눔). 매핑 규칙: rule_key = `mapping`, spec = 표준 테이블·원래 헤더→논리 컬럼. 상태: effective(키마다 발행된 최신 버전, 취소 안 됨) · superseded · pending(그 실행이 발행 전이거나 실패 — 결정 M6-D1) · revoked.
+- **구현(M6-6b, `prep/reuse_step.py`, 결정 M6-D4):** 미리보기 기본 선택(저장된 선택이 없을 때)을 셀의 양식(`run_template`)으로 정한다. 양식에 효력 있는 표준화 규칙이 없으면(이 실행이 승인한 규칙은 제외) 지금처럼 전체 선택. 있으면 셀의 모든 진단 코드에 같은 묶음 ID 규칙이 있고, 규칙의 설정 해시·변환 ID가 지금과 같고, 원문 형태 서명이 승인 서명 집합에 있고, 그 셀의 논리 컬럼에 스키마 변경(F10)이 감지되지 않은 셀만 미리 선택한다(AC-09-2). 미리 선택된 셀이 하나라도 있는 묶음은 승인, 그 묶음의 나머지 셀은 제외 셀로 둔다. 규칙과 맞는 셀이 없는 묶음은 선택 해제로 시작한다. 이렇게 만든 선택도 일반 선택과 같이 서버가 검증한 적용 계획이며 최종 확인 없이는 적용되지 않는다(AC-09-3). 미리보기 묶음에 `reuse`(규칙과 맞는 셀 수), 묶음 셀 목록에 셀별 `reuse`를 준다. 설정이 바뀌어 규칙이 하나도 맞지 않으면 그 양식의 묶음은 모두 선택 해제로 시작한다(예전 승인이 지금 설정을 덮지 않으므로).
 
 ### 10-3. 템플릿과 스키마 변경 (F10)
 - 템플릿 = (출처, 표준 테이블, `header_signature` — 원래 헤더를 정규화·정렬한 목록의 해시).
@@ -396,7 +397,7 @@ T-11: workspace 안의 정답 폴더 심볼릭 링크, `../` 경로, 업로드 �
 | `GET /runs/{id}/drift` · `POST /drift/select` · `POST /drift/confirm` | 매핑 전 스키마 변경(SC03): 항목별 상태·비교 후보·변경 목록, 비교 기준 선택(`template_id` 또는 `null`=기준 생성), 확인(M6-4) |
 | `POST /runs/{id}/propose` · `PUT /runs/{id}/mapping` | 테이블 재제안, 매핑 확정(구조 승인) |
 | `POST /runs/{id}/diagnose` · `GET /diagnosis` · `GET /issues` · `GET /duplicates` · `GET /source` | 진단, 항목·중복 그룹, 원본 행 |
-| `GET /runs/{id}/preview` · `GET /preview/groups/{묶음}` · `PUT /selection` | 미리보기, 묶음 셀 목록, 선택(묶음·제외 셀) |
+| `GET /runs/{id}/preview` · `GET /preview/groups/{묶음}` · `PUT /selection` | 미리보기(묶음별 재사용 규칙과 맞는 셀 수 `reuse`), 묶음 셀 목록(셀별 `reuse`), 선택(묶음·제외 셀) |
 | `POST /runs/{id}/execute` · `POST /retry` | 실행(해시 7종, 선택 `reuse: {groups, mappings}` = 재사용 규칙 승인 M6-5), 실패 실행 재시도 |
 | `GET /runs/{id}/result` · `GET /changes` · `GET /remaining` · `GET /files/{name}` · `GET /failure-report` | 결과·변경 내역·남은 문제·내려받기(해시 재대조)·실패 진단 리포트 |
 
