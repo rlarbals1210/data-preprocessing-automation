@@ -151,7 +151,7 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
 
     @app.post("/api/runs/{run_id}/execute")
     def execute(run_id: str, body: Annotated[dict | None, Body()] = None):
-        return ws.execute(run_id, (body or {}).get("approval") or {})
+        return ws.execute(run_id, (body or {}).get("approval") or {}, (body or {}).get("reuse"))
 
     @app.get("/api/runs/{run_id}/result")
     def result(run_id: str):

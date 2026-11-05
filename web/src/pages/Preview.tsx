@@ -99,6 +99,8 @@ export default function Preview({ run }: { run: Run }) {
   const p = useQuery({ queryKey: ['preview', run.id], queryFn: () => api.preview(run.id) });
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [reuseGroups, setReuseGroups] = useState<string[]>([]);
+  const [reuseMappings, setReuseMappings] = useState<number[]>([]);
   const qc = useQueryClient();
   const nav = useNavigate();
   useEffect(() => {
@@ -109,7 +111,11 @@ export default function Preview({ run }: { run: Run }) {
     onSuccess: (data) => qc.setQueryData(['preview', run.id], data),
   });
   const execute = useMutation({
-    mutationFn: () => api.execute(run.id, p.data!.approval),
+    mutationFn: () =>
+      api.execute(run.id, p.data!.approval, {
+        groups: reuseGroups.filter((g) => p.data!.groups.some((x) => x.id === g && x.approved && x.cells > 0)),
+        mappings: reuseMappings,
+      }),
     onSuccess: () => {
       setOpen(false);
       ['run', 'result', 'changes'].forEach((k) => qc.invalidateQueries({ queryKey: [k, run.id] }));
@@ -133,6 +139,9 @@ export default function Preview({ run }: { run: Run }) {
   const allOn = approved.length === selectable.length;
   const finished = FINISHED.includes(run.status);
   const blocked = Object.entries(x.not_publishable ?? {});
+  const targets = run.files.filter((f) => !f.read_error && f.mapping?.table);
+  const flip = <T,>(xs: T[], v: T, on: boolean) => (on ? [...xs.filter((a) => a !== v), v] : xs.filter((a) => a !== v));
+  const reuseCount = reuseGroups.filter((g) => approved.includes(g)).length + reuseMappings.length;
 
   return (
     <Stack>
@@ -192,6 +201,7 @@ export default function Preview({ run }: { run: Run }) {
               <Table.Th>규칙</Table.Th>
               <Table.Th ta="right">셀</Table.Th>
               <Table.Th>예시</Table.Th>
+              <Table.Th ta="center">재사용</Table.Th>
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
@@ -249,10 +259,20 @@ export default function Preview({ run }: { run: Run }) {
                       ))}
                     </Stack>
                   </Table.Td>
+                  <Table.Td ta="center">
+                    <Checkbox
+                      size="xs"
+                      aria-label={`재사용 ${g.table} ${g.column} ${g.code}`}
+                      data-testid="reuse-group"
+                      checked={g.approved && reuseGroups.includes(g.id)}
+                      disabled={finished || !g.cells || !g.approved}
+                      onChange={(e) => setReuseGroups(flip(reuseGroups, g.id, e.currentTarget.checked))}
+                    />
+                  </Table.Td>
                 </Table.Tr>
                 {expanded === g.id && (
                   <Table.Tr>
-                    <Table.Td colSpan={7} p={0}>
+                    <Table.Td colSpan={8} p={0}>
                       <GroupCells
                         run={run}
                         group={g}
@@ -294,6 +314,21 @@ export default function Preview({ run }: { run: Run }) {
               발행 제외: {blocked.map(([t]) => t).join(', ')}
             </Alert>
           )}
+          <Stack gap={4}>
+            <Text fz="sm" fw={600}>
+              재사용 규칙 <span data-testid="reuse-count">{reuseCount}</span>
+            </Text>
+            {targets.map((f) => (
+              <Checkbox
+                key={f.item_id}
+                size="xs"
+                data-testid="reuse-mapping"
+                label={`${f.name}${f.sheet ? ` [${f.sheet}]` : ''} · 매핑`}
+                checked={reuseMappings.includes(f.item_id)}
+                onChange={(e) => setReuseMappings(flip(reuseMappings, f.item_id, e.currentTarget.checked))}
+              />
+            ))}
+          </Stack>
           {execute.error && <Alert color="red">{(execute.error as Error).message}</Alert>}
           <Group justify="flex-end">
             <Button variant="default" onClick={() => setOpen(false)}>

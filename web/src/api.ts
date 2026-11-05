@@ -39,8 +39,10 @@ export type RunStatus =
   | 'completed_with_issues'
   | 'failed';
 export const FINISHED: RunStatus[] = ['completed', 'completed_with_issues', 'failed'];
+export type ReuseChoice = { groups: string[]; mappings: number[] };
 export type ResultSummary = {
   status: 'completed' | 'completed_with_issues' | 'failed';
+  reuse_rules?: number;
   changed_cells?: number;
   rows?: number;
   before?: Record<string, number>;
@@ -365,11 +367,11 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ approved_groups, excluded_cells }),
     }),
-  execute: (id: string, approval: Record<string, string | null>) =>
+  execute: (id: string, approval: Record<string, string | null>, reuse?: ReuseChoice) =>
     req<ResultSummary>(`/runs/${id}/execute`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ approval }),
+      body: JSON.stringify(reuse ? { approval, reuse } : { approval }),
     }),
   result: (id: string) =>
     req<ResultSummary & { files: { name: string; rows: number }[]; evidence: string[]; published: boolean }>(

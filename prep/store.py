@@ -365,6 +365,63 @@ MIGRATIONS.append(
     """)
 
 
+MIGRATIONS.append(
+    # 6: M6-5 재사용 규칙 — TD 10-2, 결정 M6-D1(승인은 최종 확인 때, 효력은 그 실행이 발행했을 때만)
+    f"""
+    CREATE TABLE reuse_rule (
+        id INTEGER PRIMARY KEY,
+        template_id INTEGER NOT NULL REFERENCES template(id),
+        kind TEXT NOT NULL CHECK (kind IN ('mapping', 'standardize')),
+        rule_key TEXT NOT NULL CHECK (length(rule_key) > 0),
+        version INTEGER NOT NULL CHECK (version >= 1),
+        spec TEXT NOT NULL CHECK (json_valid(spec) AND json_type(spec) = 'object'),
+        transform_id TEXT,
+        config_hash TEXT NOT NULL CHECK (length(config_hash) = 64),
+        approval_id INTEGER NOT NULL REFERENCES approval(id),
+        approved_in_run INTEGER NOT NULL REFERENCES run(id),
+        approved_at TEXT NOT NULL DEFAULT {_NOW},
+        revoked_at TEXT,
+        revoked_reason TEXT,
+        UNIQUE (template_id, kind, rule_key, version),
+        CHECK ((kind = 'mapping') = (transform_id IS NULL)),
+        CHECK ((revoked_at IS NULL) = (revoked_reason IS NULL)));
+
+    CREATE TRIGGER reuse_rule_no_delete BEFORE DELETE ON reuse_rule
+    BEGIN SELECT RAISE(ABORT, 'append-only: reuse_rule 행은 지울 수 없다'); END;
+
+    -- 재사용 규칙: 바꿀 수 있는 것은 승인 취소 표시(한 번)뿐이다(FS 5절).
+    CREATE TRIGGER reuse_rule_update_guard BEFORE UPDATE ON reuse_rule
+    WHEN OLD.revoked_at IS NOT NULL OR NEW.revoked_at IS NULL
+      OR NEW.id IS NOT OLD.id OR NEW.template_id IS NOT OLD.template_id OR NEW.kind IS NOT OLD.kind
+      OR NEW.rule_key IS NOT OLD.rule_key OR NEW.version IS NOT OLD.version OR NEW.spec IS NOT OLD.spec
+      OR NEW.transform_id IS NOT OLD.transform_id OR NEW.config_hash IS NOT OLD.config_hash
+      OR NEW.approval_id IS NOT OLD.approval_id OR NEW.approved_in_run IS NOT OLD.approved_in_run
+      OR NEW.approved_at IS NOT OLD.approved_at
+    BEGIN SELECT RAISE(ABORT, 'append-only: 재사용 규칙은 승인 취소 표시만 한 번 할 수 있다'); END;
+
+    -- 재사용 승인은 그 실행의 reuse 승인 행에만 붙는다.
+    CREATE TRIGGER reuse_rule_approval_kind BEFORE INSERT ON reuse_rule
+    WHEN (SELECT kind FROM approval WHERE id = NEW.approval_id) IS NOT 'reuse'
+      OR (SELECT run_id FROM approval WHERE id = NEW.approval_id) IS NOT NEW.approved_in_run
+    BEGIN SELECT RAISE(ABORT, 'reuse_rule: 같은 실행의 재사용 승인에만 연결할 수 있다'); END;
+
+    CREATE TRIGGER reuse_rule_approved_event AFTER INSERT ON reuse_rule
+    BEGIN
+        INSERT INTO event (subject_type, subject_id, kind, payload)
+        VALUES ('template', NEW.template_id, 'reuse_approved',
+                json_object('rule', NEW.id, 'kind', NEW.kind, 'key', NEW.rule_key, 'version', NEW.version,
+                            'run', NEW.approved_in_run));
+    END;
+
+    CREATE TRIGGER reuse_rule_revoked_event AFTER UPDATE OF revoked_at ON reuse_rule
+    BEGIN
+        INSERT INTO event (subject_type, subject_id, kind, payload)
+        VALUES ('template', NEW.template_id, 'reuse_revoked',
+                json_object('rule', NEW.id, 'reason', NEW.revoked_reason));
+    END;
+    """)
+
+
 class StoreError(RuntimeError):
     pass
 

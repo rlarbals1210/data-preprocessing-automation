@@ -19,7 +19,7 @@ from pathlib import Path
 
 from diagnostics.engine import diagnose, read_table
 from prep import attempt as attempts
-from prep import publish, templates, versions
+from prep import publish, reuse, templates, versions
 from prep.apply import ApplyError, build_apply_plan, group_id, verify_plan
 from prep.apply import candidates as apply_candidates
 from prep.apply import groups as apply_groups
@@ -688,8 +688,12 @@ class Workspace(_VersionsMixin, DriftMixin):
         return self.changes_preview(run_id)
 
     # ---- 실행 ----
-    def execute(self, run_id: str, presented: dict) -> dict:
-        """실행 승인(화면이 보여 준 해시 7종) → 재확인 → 정제. AC-06-4·AC-07-6."""
+    def execute(self, run_id: str, presented: dict, reuse_choice: dict | None = None) -> dict:
+        """실행 승인(화면이 보여 준 해시 7종) → 재확인 → 정제. AC-06-4·AC-07-6.
+
+        reuse_choice: {groups: [묶음 ID], mappings: [업로드 항목 ID]} — 재사용 규칙 승인(F06-5·F09, 실행 승인과 별개).
+        최종 확인 때 기록하고, 효력은 이 실행이 결과를 발행했을 때만 생긴다(M6-D1).
+        """
         run = self.load(run_id)
         self._open(run)
         if run["status"] != "awaiting_approval":
@@ -697,6 +701,7 @@ class Workspace(_VersionsMixin, DriftMixin):
         base = self.run_dir(run_id)
         report = self._report(run_id)
         plan = self._plan(run_id)
+        reuse_rules = self._reuse_rules(run, report, plan, reuse_choice or {})  # 실행 승인 전에 검증만
         try:
             approval = self.ledger.approve_execution(run["db_run"], presented or {})
             load_snapshot(self.root, run["config_hash"], self.guard)  # 승인 뒤 설정 스냅샷 변조 확인
@@ -706,6 +711,7 @@ class Workspace(_VersionsMixin, DriftMixin):
             raise FlowError("approval_mismatch", str(exc), 409) from exc
         except (SnapshotError, ApplyError) as exc:
             raise FlowError("stale_plan", str(exc), 409) from exc
+        reuse_approval = reuse.record(self.store, run["db_run"], reuse_rules, self.ledger.current_hashes(run["db_run"]))
         config = json.loads((base / "engine-config.json").read_text(encoding="utf-8"))
         view = self.guard.safe_join(base, "view")
         attempt = attempts.start(self.store, self.guard, run["db_run"], base, approval)  # M1-10b 새 시도 폴더
@@ -746,9 +752,29 @@ class Workspace(_VersionsMixin, DriftMixin):
                                               "plan_hash": plan["hash"], "approval": approval,
                                               "attempt": attempt.number, "audit": audit,
                                               "result_version": version, "integrity_after": integrity_after,
-                                              "excluded_tables": manifest["excluded_tables"]})
+                                              "excluded_tables": manifest["excluded_tables"],
+                                              "reuse_approval": reuse_approval, "reuse_rules": len(reuse_rules)})
         self.save(run)
         return run["result"]
+
+    def _reuse_rules(self, run: dict, report: dict, plan: dict, choice: dict) -> list[dict]:
+        groups, items = choice.get("groups") or [], choice.get("mappings") or []
+        if not isinstance(groups, list) or not isinstance(items, list) or not all(
+                isinstance(g, str) for g in groups) or not all(isinstance(i, int) for i in items):
+            raise FlowError("bad_reuse", "reuse는 {groups: [묶음 ID], mappings: [파일 ID]} 형식이다")
+        if not groups and not items:
+            return []
+        outside = sorted(set(groups) - set(plan["approved_groups"]))
+        if outside:
+            raise FlowError("bad_reuse", f"승인하지 않은 묶음은 재사용 규칙으로 저장할 수 없다: {outside}")
+        cat = self._catalog(run)
+        links = templates.for_run(self.store, run["db_run"])
+        cells, _ = apply_candidates(report, self._blocked(run["id"]))
+        try:
+            return (reuse.mapping_rules(items, {f["item_id"]: f for f in run["files"]}, links)
+                    + reuse.standardize_rules(groups, plan["allow"], cells, cat.rules, links))
+        except reuse.ReuseError as exc:
+            raise FlowError("bad_reuse", str(exc)) from exc
 
     def _baseline_profiles(self, run: dict, manifest: dict) -> list[dict]:
         """발행되는 표준 테이블의 실행 대상 항목마다 원문 기준 프로파일(TD 10-3). 발행 제외 테이블은 기준이 아니다."""

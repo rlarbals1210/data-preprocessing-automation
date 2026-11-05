@@ -124,7 +124,7 @@
 | attempt | id, run_id, path, started_at, ended_at, outcome | 엔진 정제 시도 폴더(완료 판정 아님) |
 | result_version | id, run_id(nullable), kind(cleaned/restore), restored_from, attempt_id, data_hashes(json), manifest_path, created_at | **완료 판정의 유일한 기준** |
 | run_metrics | run_id, review_items(json), inputs(json) | F09 검토 항목 수와 계산 근거 |
-| reuse_rule | id, template_id, version, kind, spec(json), transform_id, config_hash, approved_in_run, approved_at, revoked_at | |
+| reuse_rule | id, template_id, kind(mapping/standardize), rule_key, version, spec(json), transform_id, config_hash, approval_id(같은 실행의 reuse 승인), approved_in_run, approved_at, revoked_at, revoked_reason | 키(양식·종류·rule_key)마다 버전. 취소 표시만 한 번(M6-5) |
 | masking_config | id, template_id, version, decisions(json), confirmed_at | 템플릿별 결정 |
 | masking_snapshot | id, result_version_id, decisions(json: 템플릿·표준 테이블·컬럼 키별), hash, created_at | 한 번의 공유에 쓴 전체 결정 |
 | share_output | id, result_version_id, masking_snapshot_id, path, hashes(json), created_at | 재생성은 새 행·새 폴더 |
@@ -308,6 +308,7 @@ T-05(AC-04-1·04-2): 개발용 한글 헤더 입력과 같은 내용을 영문 �
 - 매핑 규칙 spec = (원래 헤더 → 논리 컬럼). 같은 템플릿에서만.
 - 승인 취소는 준비 중인 실행의 미리 선택을 해제하고 해당 실행 승인을 무효로 한다.
 - 서명의 효과·오수정·검토 감소 평가는 ④.
+- **구현(M6-5, `prep/reuse.py`):** 최종 확인(`POST /runs/{id}/execute`의 `reuse: {groups, mappings}`) 때 실행 승인과 별개로 `approval(kind=reuse)` 한 행과 규칙 행을 기록한다(승인하지 않은 묶음·적용 셀이 없는 묶음·실행 대상이 아닌 파일은 실행 승인 전에 400 `bad_reuse`). 표준화 규칙: rule_key = 묶음 ID(테이블.컬럼.진단 코드), 변환 ID = 진단 코드(`type`·`pattern`이면 `:컬럼 표준화 정책`), 서명 = 허용 셀 원문의 형태 서명 집합(양식별로 나눔). 매핑 규칙: rule_key = `mapping`, spec = 표준 테이블·원래 헤더→논리 컬럼. 상태: effective(키마다 발행된 최신 버전, 취소 안 됨) · superseded · pending(그 실행이 발행 전이거나 실패 — 결정 M6-D1) · revoked.
 
 ### 10-3. 템플릿과 스키마 변경 (F10)
 - 템플릿 = (출처, 표준 테이블, `header_signature` — 원래 헤더를 정규화·정렬한 목록의 해시).
@@ -395,7 +396,7 @@ T-11: workspace 안의 정답 폴더 심볼릭 링크, `../` 경로, 업로드 �
 | `POST /runs/{id}/propose` · `PUT /runs/{id}/mapping` | 테이블 재제안, 매핑 확정(구조 승인) |
 | `POST /runs/{id}/diagnose` · `GET /diagnosis` · `GET /issues` · `GET /duplicates` · `GET /source` | 진단, 항목·중복 그룹, 원본 행 |
 | `GET /runs/{id}/preview` · `GET /preview/groups/{묶음}` · `PUT /selection` | 미리보기, 묶음 셀 목록, 선택(묶음·제외 셀) |
-| `POST /runs/{id}/execute` · `POST /retry` | 실행(해시 7종), 실패 실행 재시도 |
+| `POST /runs/{id}/execute` · `POST /retry` | 실행(해시 7종, 선택 `reuse: {groups, mappings}` = 재사용 규칙 승인 M6-5), 실패 실행 재시도 |
 | `GET /runs/{id}/result` · `GET /changes` · `GET /remaining` · `GET /files/{name}` · `GET /failure-report` | 결과·변경 내역·남은 문제·내려받기(해시 재대조)·실패 진단 리포트 |
 
 ### 12-2. 프론트엔드
