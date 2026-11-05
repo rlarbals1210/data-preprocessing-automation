@@ -2,7 +2,8 @@
 
 순수 함수다. 업로드 원문·기준 프로파일을 읽기만 하고 어떤 값도 바꾸지 않는다(AC-10-3). 변화는 알림이며 오류가 아니다.
 
-1. `candidates`: 같은 출처의 기존 양식 중 원래 헤더(정규화)가 가장 많이 겹치는 양식을 비교 **후보**로 고른다.
+1. `candidates`: 정규화 헤더 구성이 정확히 같은 양식이 하나면 그 양식(양식 정의상 같은 단위). 아니면 같은 출처의
+   기존 양식 중 원래 헤더(정규화)가 가장 많이 겹치는 양식을 비교 **후보**로 고른다.
    겹침이 없거나 1위가 동률이면 자동으로 정하지 않는다(사용자 선택 또는 "기준 생성", TD 10-3).
 2. `compare`: 새 표를 선택한 양식의 기준 프로파일과 비교해 QE 3-3의 변화 6종을 보고한다.
    - 원래 헤더 변경: 원래 헤더 문자열 목록(정규화 전·순서 포함)이 다르면
@@ -31,7 +32,12 @@ NEW_VALUES_SHOWN = 20
 
 
 def candidates(headers: list[str], templates: list[dict]) -> dict:
-    """비교 후보 양식. templates: {id, std_table, headers(정규화 목록)}. 반환: {choice, ranked, reason}."""
+    """비교 후보 양식. templates: {id, std_table, headers(정규화 목록)}. 반환: {choice, ranked, reason}.
+
+    정규화 헤더 구성이 정확히 같은 양식이 하나뿐이면 그 양식이다(양식 정의 그대로, reason=same_headers).
+    아니면 겹침 수 1위를 후보로 하되, 겹침이 없거나 1위가 동률이면 자동으로 정하지 않는다.
+    """
+    exact = [t for t in templates if sorted(t["headers"]) == sorted(norm(h) for h in headers if h.strip())]
     mine = {norm(h) for h in headers if h.strip()}
     ranked = sorted(({"template_id": t["id"], "std_table": t["std_table"], "overlap": len(mine & set(t["headers"])),
                       "size": len(set(t["headers"]))} for t in templates),
@@ -39,6 +45,8 @@ def candidates(headers: list[str], templates: list[dict]) -> dict:
     ranked = [r for r in ranked if r["overlap"] > 0]
     if not ranked:
         return {"choice": None, "ranked": [], "reason": "no_overlap"}
+    if len(exact) == 1:
+        return {"choice": exact[0]["id"], "ranked": ranked, "reason": "same_headers"}
     if len(ranked) > 1 and ranked[0]["overlap"] == ranked[1]["overlap"]:
         return {"choice": None, "ranked": ranked, "reason": "tie"}
     return {"choice": ranked[0]["template_id"], "ranked": ranked, "reason": "most_overlap"}

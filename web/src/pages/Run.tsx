@@ -5,6 +5,7 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams } fr
 import { FINISHED, api, type Run } from '../api';
 import { APPROVAL_KIND, RUN_STATUS, SET_LABEL, invalidated, when } from '../labels';
 import Diagnosis from './Diagnosis';
+import Drift from './Drift';
 import Integrity from './Integrity';
 import Mapping from './Mapping';
 import Preview from './Preview';
@@ -12,10 +13,11 @@ import Result from './Result';
 
 const DIAGNOSED: Run['status'][] = ['diagnosed', 'awaiting_approval', ...FINISHED];
 
-type Step = { key: string; label: string; ready?: (r: Run) => boolean; disabled?: boolean };
+type Step = { key: string; label: string; ready?: (r: Run) => boolean; disabled?: (r: Run) => boolean };
+const driftPending = (r: Run) => !!r.drift?.required && !r.drift.confirmed;
 const STEPS: Step[] = [
-  { key: 'upload', label: '업로드', disabled: true },
-  { key: 'drift', label: '스키마 변경', disabled: true },
+  { key: 'upload', label: '업로드', disabled: () => true },
+  { key: 'drift', label: '스키마 변경', ready: (r) => !!r.drift?.required, disabled: (r) => !r.drift?.required },
   { key: 'mapping', label: '매핑 확인', ready: () => true },
   { key: 'diagnosis', label: '진단', ready: (r) => DIAGNOSED.includes(r.status) },
   { key: 'integrity', label: '정합성', ready: (r) => DIAGNOSED.includes(r.status) },
@@ -39,7 +41,9 @@ export default function RunPage() {
       ? 'preview'
       : r.status === 'diagnosed'
         ? 'diagnosis'
-        : 'mapping';
+        : driftPending(r)
+          ? 'drift'
+          : 'mapping';
 
   return (
     <>
@@ -108,24 +112,28 @@ export default function RunPage() {
         mb="lg"
         onStepClick={(i) => {
           const s = STEPS[i];
-          if (!s.disabled && s.ready?.(r)) nav(`/runs/${id}/${s.key}`);
+          if (!s.disabled?.(r) && s.ready?.(r)) nav(`/runs/${id}/${s.key}`);
         }}
         styles={{ separator: { marginInline: 6, minWidth: 8 }, stepLabel: { whiteSpace: 'nowrap' } }}
       >
-        {STEPS.map((s, i) => (
-          <Stepper.Step
-            key={s.key}
-            label={s.label}
-            color={s.disabled ? 'gray' : undefined}
-            completedIcon={s.disabled ? <IconMinus size={14} /> : <IconCheck size={14} />}
-            allowStepSelect={!s.disabled && !!s.ready?.(r) && i !== active}
-            style={s.disabled ? { opacity: 0.45 } : undefined}
-          />
-        ))}
+        {STEPS.map((s, i) => {
+          const off = !!s.disabled?.(r);
+          return (
+            <Stepper.Step
+              key={s.key}
+              label={s.label}
+              color={off ? 'gray' : undefined}
+              completedIcon={off ? <IconMinus size={14} /> : <IconCheck size={14} />}
+              allowStepSelect={!off && !!s.ready?.(r) && i !== active}
+              style={off ? { opacity: 0.45 } : undefined}
+            />
+          );
+        })}
       </Stepper>
       <Routes>
         <Route index element={<Navigate to={start} replace />} />
-        <Route path="mapping" element={<Mapping key={r.id} run={r} />} />
+        <Route path="drift" element={<Drift run={r} />} />
+        <Route path="mapping" element={driftPending(r) ? <Navigate to="../drift" replace /> : <Mapping key={r.id} run={r} />} />
         <Route path="diagnosis" element={<Diagnosis run={r} />} />
         <Route path="integrity" element={<Integrity run={r} />} />
         <Route path="preview" element={<Preview run={r} />} />

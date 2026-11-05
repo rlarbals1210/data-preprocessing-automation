@@ -317,6 +317,7 @@ T-05(AC-04-1·04-2): 개발용 한글 헤더 입력과 같은 내용을 영문 �
 - 변화 판단 기준은 ④.
 - **구현(M6-2, `prep/templates.py`·`prep/profile.py`):** `header_signature` = 빈 머리글을 뺀 원래 헤더를 QE 3-1로 정규화·정렬한 JSON 목록의 SHA-256. 구조 승인(매핑 버전)마다 실행 대상 항목을 양식에 연결한다(`run_template`, 매핑을 다시 확정하면 새 연결). 기준 프로파일은 결과 발행과 같은 DB 트랜잭션에서 발행 대상 테이블의 항목마다 원문 기준으로 저장하고(발행 제외 테이블·실패 실행·복원 버전은 기준 아님, 결정 M6-D3), 저장 실패 시 발행도 되돌린다. 양식의 기준 = 그 양식 프로파일을 남긴 마지막 정제 결과 버전(`templates.baseline`). 프로파일은 원래 헤더 목록·정규화 헤더 집합·컬럼별 형태 서명 분포·비어 있지 않은 값 수·논리 타입 범위(파싱 불가·시간대 없는 시각은 건수만)·허용값 집합이다.
 - **구현(M6-3, `prep/drift.py`, 순수 함수):** `candidates` = 같은 출처 양식을 정규화 헤더 겹침 수로 정렬(겹침 0은 후보 아님, 1위 동률·후보 없음은 자동 확정 안 함). 기준 실행에 같은 양식 항목이 여럿이면 원래 헤더가 가장 많이 같은 프로파일, 동률이면 실행 대상 순서가 앞선 것과 비교한다. 새 표에는 같은 정규화 헤더의 기준 매핑 논리 규칙을 빌려 결측 표현·타입·허용값을 같은 기준으로 잰다. 변화 종류: `raw_headers`(순서만 바뀐 경우 표시) · `column_removed`/`column_added` · `rename_suspected`/`rename_undetermined`(사라진×새 컬럼 쌍마다) · `value_shape`/`shape_undetermined` · `value_range`(새 최소·최대가 기준 범위 **밖**일 때만 알림 — 좁아지는 변화는 알리지 않음, 파싱 불가·시간대 없는 건수 함께) · `category_new`(최대 20개 표시와 전체 건수). 비율 경계(80%·10%)는 분수로 계산해 "같음"을 포함한다.
+- **구현(M6-4, `prep/drift_step.py`):** 업로드·재시도 때 항목별로 비교한다. 정규화 헤더 구성이 정확히 같은 양식이 하나면 그 양식(양식 정의상 같은 단위, 겹침 동률보다 우선). 항목 상태 `no_change`·`changed`·`choose`(후보 동률)·`baseline_create`(겹치는 양식 없음 또는 사용자가 기준 생성 선택)·`no_baseline`(양식은 있으나 발행한 기준 없음). `changed`·`choose`가 있으면 확인이 필요하고(실행 상태 사유 `schema_drift`), 확인 전 매핑 확정은 409 `drift_unconfirmed`. 비교 기준은 후보 안에서만 고르고 매핑 확정 뒤에는 바꿀 수 없다(409 `mapping_confirmed`). event: `drift_checked`·`drift_selected`·`drift_confirmed`(항목 요약·결과 해시).
 
 ### 10-4. 개인정보·공유 출력 (F11·F13)
 - **결정 키:** (템플릿, 표준 테이블, 컬럼 키). 컬럼 키는 논리 컬럼 또는 `extra:<원래 헤더>`. 같은 원래 헤더가 다른 템플릿·테이블에 있어도 섞이지 않는다.
@@ -390,6 +391,7 @@ T-11: workspace 안의 정답 폴더 심볼릭 링크, `../` 경로, 업로드 �
 |---|---|
 | `GET /sets` · `GET /sources` · `GET/POST /runs` | 설정 세트·출처 목록, 실행 목록·업로드(출처 필수) |
 | `GET /runs/{id}` | 실행(상태·상태 이유·승인 기록·표준 목록) |
+| `GET /runs/{id}/drift` · `POST /drift/select` · `POST /drift/confirm` | 매핑 전 스키마 변경(SC03): 항목별 상태·비교 후보·변경 목록, 비교 기준 선택(`template_id` 또는 `null`=기준 생성), 확인(M6-4) |
 | `POST /runs/{id}/propose` · `PUT /runs/{id}/mapping` | 테이블 재제안, 매핑 확정(구조 승인) |
 | `POST /runs/{id}/diagnose` · `GET /diagnosis` · `GET /issues` · `GET /duplicates` · `GET /source` | 진단, 항목·중복 그룹, 원본 행 |
 | `GET /runs/{id}/preview` · `GET /preview/groups/{묶음}` · `PUT /selection` | 미리보기, 묶음 셀 목록, 선택(묶음·제외 셀) |

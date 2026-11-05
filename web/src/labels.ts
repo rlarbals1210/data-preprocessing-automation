@@ -1,4 +1,4 @@
-import type { Category } from './api';
+import type { Category, DriftState } from './api';
 
 export const CATEGORY: Record<Category, { label: string; color: string }> = {
   business_rule_violation: { label: '업무 규칙 위반', color: 'red' },
@@ -144,4 +144,24 @@ export const INTEGRITY_REASON: Record<string, string> = {
   ambiguous_join: '연결 모호',
   missing_column: '컬럼 없음',
   excluded_target: '대상 테이블 없음',
+};
+
+export const DRIFT_STATE: Record<DriftState, { label: string; color: string }> = {
+  no_change: { label: '변경 없음', color: 'teal' },
+  changed: { label: '변경 있음', color: 'orange' },
+  choose: { label: '비교 기준 선택 필요', color: 'red' },
+  baseline_create: { label: '기준 생성', color: 'gray' },
+  no_baseline: { label: '기준 없음', color: 'gray' },
+};
+
+export const DRIFT_KIND: Record<string, string> = {
+  raw_headers: '원래 헤더 변경',
+  column_removed: '컬럼 삭제',
+  column_added: '컬럼 추가',
+  rename_suspected: '이름 변경 의심',
+  rename_undetermined: '이름 변경 판단 안 함',
+  value_shape: '값 모양 변화',
+  shape_undetermined: '값 모양 판단 안 함',
+  value_range: '값 범위 변화',
+  category_new: '범주 새 값',
 };

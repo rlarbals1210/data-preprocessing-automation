@@ -86,6 +86,21 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
     def retry(run_id: str):
         return ws.retry(run_id)
 
+    @app.get("/api/runs/{run_id}/drift")
+    def drift(run_id: str):
+        return ws.drift_view(run_id)
+
+    @app.post("/api/runs/{run_id}/drift/select")
+    def drift_select(run_id: str, body: Annotated[dict, Body()]):
+        template = body.get("template_id")
+        if template is not None and not isinstance(template, int):
+            raise FlowError("bad_template", "template_id는 정수 또는 null이다")
+        return ws.drift_select(run_id, int(body.get("item_id", 0)), template)
+
+    @app.post("/api/runs/{run_id}/drift/confirm")
+    def drift_confirm(run_id: str):
+        return ws.drift_confirm(run_id)
+
     @app.post("/api/runs/{run_id}/propose")
     def propose(run_id: str, body: Annotated[dict, Body()]):
         return ws.propose_table(run_id, int(body.get("item_id", 0)), str(body.get("table", "")))

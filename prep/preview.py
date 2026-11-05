@@ -23,6 +23,8 @@ from prep import publish, templates, versions
 from prep.apply import ApplyError, build_apply_plan, group_id, verify_plan
 from prep.apply import candidates as apply_candidates
 from prep.apply import groups as apply_groups
+from prep.drift_step import DriftMixin
+from prep.errors import FlowError
 from prep.guard import Guard
 from prep.integrity import Data as IntegrityData
 from prep.integrity import evaluate as evaluate_integrity
@@ -45,11 +47,6 @@ FINISHED = {"completed", "completed_with_issues", "failed"}
 EVIDENCE_FILES = ("changes.json", "diagnosis-before.json", "diagnosis-after.json", "integrity.json", "held.json",
                   "absent-cells.json", "manifest.json")  # 내부 검토용 근거 파일(FS F07 출력)
 
-
-class FlowError(ValueError):
-    def __init__(self, code: str, message: str, status: int = 400):
-        super().__init__(message)
-        self.code, self.message, self.status = code, message, status
 
 
 class _VersionsMixin:
@@ -138,7 +135,7 @@ def versions_digest(hashes: dict) -> str:
     return hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
 
 
-class Workspace(_VersionsMixin):
+class Workspace(_VersionsMixin, DriftMixin):
     def __init__(self, root: Path):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
@@ -262,8 +259,10 @@ class Workspace(_VersionsMixin):
                "rows": sum(f.get("rows", 0) for f in entries), "plan": None, "result": None}
         if cat is None:  # 설정 없음: 고를 매핑이 없으므로 구조를 그대로 확정한다
             self._record_structure(run)
+            run["drift"] = None
         else:
-            self._transition(run, "needs_confirmation", "mapping")
+            self._check_drift(run)  # M6-4: 매핑 전 스키마 변경 확인(같은 단위의 기준과 비교)
+            self._transition(run, "needs_confirmation", "schema_drift" if run["drift"]["required"] else "mapping")
         self.save(run)
         return run
 
@@ -306,7 +305,9 @@ class Workspace(_VersionsMixin):
                "rows": old["rows"], "plan": None, "result": None, "retry_of": old["id"]}
         if run["snapshot"] is None:
             self._record_structure(run)
+            run["drift"] = None
         else:
+            self._check_drift(run)  # 기준이 그사이 바뀌었을 수 있어 다시 비교한다
             self._transition(run, "needs_confirmation", "retry")
         self.store.record_event("run", old["db_run"], "retried", {"new_run": db_run})
         self.save(run)
@@ -330,6 +331,7 @@ class Workspace(_VersionsMixin):
         cat = self._catalog(run)
         if cat is None:
             raise FlowError("bad_mapping", "설정 없음 실행은 매핑이 없다")
+        self._drift_gate(run)  # FS 6절: 매핑 전 스키마 변경 미확인이면 매핑으로 못 감
         by_id = {f["item_id"]: f for f in run["files"]}
         if {x.get("item_id") for x in files} != {f["item_id"] for f in run["files"] if not f["read_error"]}:
             raise FlowError("bad_mapping", "읽기에 성공한 모든 파일의 매핑이 필요하다")

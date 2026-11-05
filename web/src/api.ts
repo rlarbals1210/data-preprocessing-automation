@@ -68,9 +68,51 @@ export type Run = {
   catalog?: Catalog | null;
   retry_of?: string | null;
   retried_by?: string | null;
+  drift?: { required: boolean; confirmed: boolean } | null;
   plan: { skipped: SkippedRule[]; tables: Record<string, TablePlan>; completeness: 'full' | 'partial'; hash: string } | null;
   result: ResultSummary | null;
 };
+export type DriftState = 'no_change' | 'changed' | 'choose' | 'baseline_create' | 'no_baseline';
+export type DriftChange = {
+  kind: string;
+  column?: string;
+  baseline_column?: string;
+  logical?: string | null;
+  norm?: string;
+  before?: unknown;
+  after?: unknown;
+  added?: string[];
+  removed?: string[];
+  order_only?: boolean;
+  reason?: string;
+  filled?: { before: number; after: number };
+  dominant?: string;
+  overlap?: string;
+  new_signatures?: Record<string, number>;
+  new_ratio?: string;
+  type?: string;
+  below?: boolean;
+  above?: boolean;
+  unparsed?: number;
+  tz_naive?: number;
+  values?: string[];
+  count?: number;
+};
+export type DriftItem = {
+  item_id: number;
+  name: string;
+  sheet?: string | null;
+  headers: string[];
+  state: DriftState;
+  reason: string;
+  chosen_by: 'auto' | 'user';
+  template_id: number | null;
+  std_table: string | null;
+  candidates: { template_id: number; std_table: string; overlap: number; size: number }[];
+  baseline: { result_version_id: number; run_id: number; run: string | null } | null;
+  changes: DriftChange[];
+};
+export type Drift = { required: boolean; confirmed: boolean; items: DriftItem[] };
 export type Approval = {
   id: number;
   kind: 'structure' | 'execution';
@@ -284,6 +326,14 @@ export const api = {
   },
   run: (id: string) => req<Run>(`/runs/${id}`),
   retry: (id: string) => req<Run>(`/runs/${id}/retry`, { method: 'POST' }),
+  drift: (id: string) => req<Drift>(`/runs/${id}/drift`),
+  driftSelect: (id: string, item_id: number, template_id: number | null) =>
+    req<Drift>(`/runs/${id}/drift/select`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_id, template_id }),
+    }),
+  driftConfirm: (id: string) => req<Drift>(`/runs/${id}/drift/confirm`, { method: 'POST' }),
   propose: (id: string, item_id: number, table: string) =>
     req<Proposal>(`/runs/${id}/propose`, {
       method: 'POST',

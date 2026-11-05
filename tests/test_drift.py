@@ -48,7 +48,7 @@ def test_candidates_pick_most_overlap():
     ts = [{"id": 1, "std_table": "orders", "headers": ["주문번호", "수량", "주문일"]},
           {"id": 2, "std_table": "orders", "headers": ["주문번호", "메모"]},
           {"id": 3, "std_table": "customers", "headers": ["고객번호"]}]
-    c = candidates(["주문번호", "수량", "주문 일"], ts)
+    c = candidates(["주문번호", "수량", "주문 일", "비고"], ts)
     assert c["choice"] == 1 and c["reason"] == "most_overlap"
     assert [r["template_id"] for r in c["ranked"]] == [1, 2]  # 겹침 0은 후보 아님
 
@@ -58,6 +58,16 @@ def test_candidates_tie_and_none_are_not_auto():
     assert candidates(["a", "x"], ts) | {"ranked": None} == {"choice": None, "ranked": None, "reason": "tie"}
     assert candidates(["z"], ts) == {"choice": None, "ranked": [], "reason": "no_overlap"}
     assert candidates(["a"], [])["reason"] == "no_overlap"
+
+
+def test_candidates_same_headers_wins_over_overlap_tie():
+    """헤더 구성이 정확히 같은 양식은 겹침 동률이어도 그 양식이다 — 양식 = 출처+표준 테이블+헤더 구성."""
+    ts = [{"id": 1, "std_table": "orders", "headers": ["a", "b"]},
+          {"id": 2, "std_table": "orders", "headers": ["a", "b", "c"]}]
+    c = candidates(["A", "b"], ts)
+    assert c["choice"] == 1 and c["reason"] == "same_headers"
+    same_twice = ts + [{"id": 3, "std_table": "customers", "headers": ["a", "b"]}]
+    assert candidates(["a", "b"], same_twice)["choice"] is None  # 같은 구성이 둘이면 사용자가 고른다
 
 
 def test_pick_baseline_prefers_same_raw_headers_then_order():

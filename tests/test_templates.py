@@ -32,6 +32,9 @@ def upload(client, data=DATA, source="거래처A", name="categories.csv"):
 
 
 def confirm(client, run, columns=None):
+    d = client.get(f"/api/runs/{run['id']}/drift").json()
+    if d["required"] and not d["confirmed"]:  # M6-4: 같은 단위의 변경은 매핑 전에 확인한다
+        assert client.post(f"/api/runs/{run['id']}/drift/confirm").status_code == 200
     maps = [{"item_id": f["item_id"], **f["mapping"]} for f in run["files"]]
     if columns is not None:
         maps[0]["columns"] = columns
