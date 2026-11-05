@@ -7,6 +7,7 @@
 - 복원 이벤트는 `event(subject_type=result_version)`에 원래 정제 변경과 따로 남긴다.
 - 되돌리기는 결과에만 적용된다. 승인·매핑·재사용 규칙 기록은 건드리지 않는다(AC-08-3).
 - 스키마 변경 비교 기준(F10)은 업로드 실행의 정제 결과만 쓴다. 복원 버전은 기준이 되지 않는다(AC-08-4).
+  M6-2부터 기준은 비교·재사용 단위(양식)별이다 — `prep.templates.baseline`.
 """
 
 from __future__ import annotations
@@ -98,11 +99,3 @@ def refs(store: Store, version: dict) -> dict:
             "config_snapshot": None if snapshot is None else snapshot["hash"],
             "mapping_version": None if mapping is None else dict(mapping),
             "approval_id": None if approval is None else approval["id"], "approval_hashes": hashes}
-
-
-def schema_baseline_run(store: Store, source_id: int) -> int | None:
-    """스키마 변경 비교 기준(F10, AC-08-4): 이 출처에서 결과를 발행한 마지막 업로드 실행. 복원 버전은 무시한다."""
-    row = store.conn.execute(
-        "SELECT v.run_id FROM result_version v JOIN run r ON r.id = v.run_id JOIN batch b ON b.id = r.batch_id "
-        "WHERE b.source_id = ? AND v.kind = 'cleaned' ORDER BY v.id DESC LIMIT 1", (source_id,)).fetchone()
-    return None if row is None else row["run_id"]

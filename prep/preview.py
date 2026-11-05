@@ -19,7 +19,7 @@ from pathlib import Path
 
 from diagnostics.engine import diagnose, read_table
 from prep import attempt as attempts
-from prep import publish, versions
+from prep import publish, templates, versions
 from prep.apply import ApplyError, build_apply_plan, group_id, verify_plan
 from prep.apply import candidates as apply_candidates
 from prep.apply import groups as apply_groups
@@ -29,6 +29,7 @@ from prep.integrity import evaluate as evaluate_integrity
 from prep.integrity import provider_overrides
 from prep.mapping import Catalog, propose, validate_final
 from prep.plan import build_plan
+from prep.profile import profile_table
 from prep.runs import ApprovalError, RunLedger
 from prep.sheets import SheetError, read_source
 from prep.snapshot import SnapshotError, create_snapshot, load_snapshot
@@ -271,10 +272,15 @@ class Workspace(_VersionsMixin):
         targets = [{"upload_item_id": f["item_id"], "included": bool(not f["read_error"] and f["mapping"]["table"]),
                     "exclusion_reason": None if not f["read_error"] and f["mapping"]["table"]
                     else ("read_error" if f["read_error"] else "user_excluded")} for f in run["files"]]
-        self.ledger.set_targets(run["db_run"], targets)
-        self.ledger.record_mapping(run["db_run"],
-                                   {str(f["item_id"]): f["proposal"] for f in run["files"] if f["proposal"]},
-                                   {str(f["item_id"]): f["mapping"] for f in run["files"]})
+        items = [{"upload_item_id": f["item_id"], "table": f["mapping"]["table"], "headers": f["headers"]}
+                 for f in run["files"] if not f["read_error"] and f["mapping"]["table"]]
+        with self.store.tx():  # 매핑 버전·구조 승인·양식 연결을 함께 남긴다(M6-2)
+            self.ledger.set_targets(run["db_run"], targets)
+            mid, _ = self.ledger.record_mapping(
+                run["db_run"], {str(f["item_id"]): f["proposal"] for f in run["files"] if f["proposal"]},
+                {str(f["item_id"]): f["mapping"] for f in run["files"]})
+            if items:
+                templates.link_mapping(self.store, run["db_run"], mid, items)
 
     # ---- 재시도 (M1-10d) ----
     def retry(self, run_id: str) -> dict:
@@ -720,7 +726,10 @@ class Workspace(_VersionsMixin):
             lineage = json.loads((view / "lineage.json").read_text(encoding="utf-8"))
             manifest = publish.write_files(attempt, lineage, (run.get("plan") or {}).get("tables", {}),
                                            {f["item_id"]: f["name"] for f in run["files"]}, self.guard)
-            version = publish.record(self.store, run["db_run"], attempt, manifest, status, audit, self.guard)
+            profiles = self._baseline_profiles(run, manifest)  # M6-2: 발행한 업로드 실행만 비교 기준(M6-D3)
+            with self.store.tx():
+                version = publish.record(self.store, run["db_run"], attempt, manifest, status, audit, self.guard)
+                templates.save_profiles(self.store, version, run["db_run"], profiles)
         except Exception as exc:  # 정제·감사·발행 실패는 실행 결과로 보여 준다(결과 미발행)
             message = f"{type(exc).__name__}: {exc}"
             attempts.finish(self.store, attempt, stage, message, getattr(exc, "audit", None))
@@ -738,6 +747,24 @@ class Workspace(_VersionsMixin):
                                               "excluded_tables": manifest["excluded_tables"]})
         self.save(run)
         return run["result"]
+
+    def _baseline_profiles(self, run: dict, manifest: dict) -> list[dict]:
+        """발행되는 표준 테이블의 실행 대상 항목마다 원문 기준 프로파일(TD 10-3). 발행 제외 테이블은 기준이 아니다."""
+        cat = self._catalog(run)
+        links = templates.for_run(self.store, run["db_run"])
+        if cat is None or not links:
+            return []
+        order = {t["upload_item_id"]: t["order_no"] for t in self.store.targets(run["db_run"]) if t["included"]}
+        out = []
+        for f in run["files"]:
+            table = f["mapping"]["table"]
+            if f["item_id"] not in links or f["item_id"] not in order or table in manifest["excluded_tables"]:
+                continue
+            rules = {orig: (logical, cat.rules[table].get(logical, {}))
+                     for orig, logical in f["mapping"]["columns"].items() if logical}
+            out.append({"template_id": links[f["item_id"]], "upload_item_id": f["item_id"],
+                        "order_no": order[f["item_id"]], "profile": profile_table(f["headers"], self._rows(f), rules)})
+        return out
 
     def _recheck_integrity(self, run: dict, attempt) -> int:
         """실제 정제 결과로 정합성을 다시 평가한다. 진단 때(원문·가상) 없던 위반이 생기면 실패(발행 안 함).

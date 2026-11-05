@@ -315,6 +315,56 @@ MIGRATIONS.append(
     """)
 
 
+MIGRATIONS.append(
+    # 5: M6-2 양식(비교·재사용 단위)과 기준 프로파일 — TD 10-3, 결정 M6-D3
+    f"""
+    CREATE TABLE template (
+        id INTEGER PRIMARY KEY,
+        source_id INTEGER NOT NULL REFERENCES source(id),
+        std_table TEXT NOT NULL CHECK (length(std_table) > 0),
+        header_signature TEXT NOT NULL
+            CHECK (length(header_signature) = 64 AND header_signature NOT GLOB '*[^0-9a-f]*'),
+        headers TEXT NOT NULL CHECK (json_valid(headers) AND json_type(headers) = 'array'),
+        created_in_run INTEGER NOT NULL REFERENCES run(id),
+        created_at TEXT NOT NULL DEFAULT {_NOW},
+        UNIQUE (source_id, std_table, header_signature));
+
+    CREATE TABLE run_template (
+        run_id INTEGER NOT NULL REFERENCES run(id),
+        mapping_version_id INTEGER NOT NULL REFERENCES mapping_version(id),
+        upload_item_id INTEGER NOT NULL REFERENCES upload_item(id),
+        template_id INTEGER NOT NULL REFERENCES template(id),
+        PRIMARY KEY (mapping_version_id, upload_item_id));
+
+    CREATE TABLE template_profile (
+        id INTEGER PRIMARY KEY,
+        template_id INTEGER NOT NULL REFERENCES template(id),
+        result_version_id INTEGER NOT NULL REFERENCES result_version(id),
+        run_id INTEGER NOT NULL REFERENCES run(id),
+        upload_item_id INTEGER NOT NULL REFERENCES upload_item(id),
+        order_no INTEGER NOT NULL CHECK (order_no >= 1),
+        profile TEXT NOT NULL CHECK (json_valid(profile) AND json_type(profile) = 'object'),
+        created_at TEXT NOT NULL DEFAULT {_NOW},
+        UNIQUE (result_version_id, upload_item_id));
+
+    {_guards(("template", "run_template", "template_profile"), ("template", "run_template", "template_profile"))}
+
+    -- 기준 프로파일은 그 실행이 발행한 정제 결과에만 붙는다(복원 버전은 기준이 되지 않음, AC-08-4).
+    CREATE TRIGGER template_profile_cleaned_only BEFORE INSERT ON template_profile
+    WHEN (SELECT kind FROM result_version WHERE id = NEW.result_version_id) IS NOT 'cleaned'
+      OR (SELECT run_id FROM result_version WHERE id = NEW.result_version_id) IS NOT NEW.run_id
+    BEGIN SELECT RAISE(ABORT, 'template_profile: 그 실행이 발행한 정제 결과 버전에만 저장할 수 있다'); END;
+
+    CREATE TRIGGER template_profile_event AFTER INSERT ON template_profile
+    BEGIN
+        INSERT INTO event (subject_type, subject_id, kind, payload)
+        VALUES ('template', NEW.template_id, 'baseline_saved',
+                json_object('result_version', NEW.result_version_id, 'run', NEW.run_id,
+                            'upload_item', NEW.upload_item_id));
+    END;
+    """)
+
+
 class StoreError(RuntimeError):
     pass
 

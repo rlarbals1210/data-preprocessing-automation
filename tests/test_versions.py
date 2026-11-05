@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from api.app import create_app
-from prep import publish, versions
+from prep import publish, templates
 from prep.preview import Workspace
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -106,14 +106,15 @@ def test_restore_rules(client, two_runs):
 
 
 def test_schema_baseline_ignores_restore(client, ws, two_runs):
-    """AC-08-4: 오래된 결과를 복원해도 스키마 변경 비교 기준은 마지막 업로드 실행이다."""
+    """AC-08-4: 오래된 결과를 복원해도 스키마 변경 비교 기준은 마지막 업로드 실행이다(M6-2부터 양식 단위)."""
     sid, _, (r2, _) = two_runs
     v1 = client.get(f"/api/sources/{sid}/versions").json()[0]
     w = Workspace(ws)
     run2 = w.load(r2["id"])["db_run"]
-    assert versions.schema_baseline_run(w.store, sid) == run2
+    (tid,) = {t["id"] for t in templates.for_source(w.store, sid)}
+    assert templates.baseline(w.store, tid)["run_id"] == run2
     client.post(f"/api/versions/{v1['id']}/restore")
-    assert versions.schema_baseline_run(w.store, sid) == run2
+    assert templates.baseline(w.store, tid)["run_id"] == run2
 
 
 def test_failed_run_has_no_version(client, monkeypatch):

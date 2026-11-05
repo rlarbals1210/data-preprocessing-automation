@@ -109,7 +109,9 @@
 |---|---|---|
 | config_snapshot | id, hash, path, created_at | 과거 설정 내용 조회 가능 |
 | source | id, name, created_at | 출처 |
-| template | id, source_id, std_table, header_signature, created_in_run | 비교·재사용 단위(출처+표준 테이블+양식) |
+| template | id, source_id, std_table, header_signature, headers(json: 정규화·정렬 헤더), created_in_run | 비교·재사용 단위(출처+표준 테이블+양식) |
+| run_template | run_id, mapping_version_id, upload_item_id, template_id | 매핑 버전마다 항목→양식 연결(M6-2) |
+| template_profile | id, template_id, result_version_id, run_id, upload_item_id, order_no, profile(json) | 비교 기준 프로파일. 그 실행의 정제 결과 버전에만 붙음(트리거, M6-2) |
 | batch | id, source_id, created_at | |
 | upload_item | id, batch_id, filename, blob_sha256, kind, sheet, read_options, read_status, read_errors | 시트마다 한 행 |
 | run | id, batch_id, retry_of, status, config_snapshot_id, created_at | 실패 시도도 남음 |
@@ -313,6 +315,7 @@ T-05(AC-04-1·04-2): 개발용 한글 헤더 입력과 같은 내용을 영문 �
 - **매핑 후:** 표준 테이블이 정해지면 비교 기준을 다시 확인한다. 헤더가 바뀌어 새 템플릿이 생기면 "기존 규칙 유지 / 이번만 / 새 버전" 선택과 승인 기록을 새 템플릿 ID에 연결한다. 규칙을 새 템플릿으로 자동으로 옮기지 않는다.
 - **비교 기준 프로파일:** 템플릿의 업로드 실행이 완료될 때 저장한다. 현재 실행은 자기 비교 기준이 될 수 없다.
 - 변화 판단 기준은 ④.
+- **구현(M6-2, `prep/templates.py`·`prep/profile.py`):** `header_signature` = 빈 머리글을 뺀 원래 헤더를 QE 3-1로 정규화·정렬한 JSON 목록의 SHA-256. 구조 승인(매핑 버전)마다 실행 대상 항목을 양식에 연결한다(`run_template`, 매핑을 다시 확정하면 새 연결). 기준 프로파일은 결과 발행과 같은 DB 트랜잭션에서 발행 대상 테이블의 항목마다 원문 기준으로 저장하고(발행 제외 테이블·실패 실행·복원 버전은 기준 아님, 결정 M6-D3), 저장 실패 시 발행도 되돌린다. 양식의 기준 = 그 양식 프로파일을 남긴 마지막 정제 결과 버전(`templates.baseline`). 프로파일은 원래 헤더 목록·정규화 헤더 집합·컬럼별 형태 서명 분포·비어 있지 않은 값 수·논리 타입 범위(파싱 불가·시간대 없는 시각은 건수만)·허용값 집합이다.
 
 ### 10-4. 개인정보·공유 출력 (F11·F13)
 - **결정 키:** (템플릿, 표준 테이블, 컬럼 키). 컬럼 키는 논리 컬럼 또는 `extra:<원래 헤더>`. 같은 원래 헤더가 다른 템플릿·테이블에 있어도 섞이지 않는다.
