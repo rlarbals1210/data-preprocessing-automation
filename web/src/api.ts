@@ -1,4 +1,4 @@
-export type Grade = 'exact' | 'alias' | 'similar' | 'shape' | 'none';
+export type Grade = 'exact' | 'alias' | 'reuse' | 'similar' | 'shape' | 'none';
 export type ColumnProposal = {
   original: string;
   logical: string | null;
@@ -6,9 +6,10 @@ export type ColumnProposal = {
   candidates: { logical: string; grade: Grade; score: number | null }[];
   reasons: string[];
   needs_confirmation: boolean;
+  reuse_version?: number;
 };
 export type Proposal = {
-  table: { table: string | null; auto: boolean; basis: 'name' | 'headers' | 'user' | null; scores: Record<string, number> };
+  table: { table: string | null; auto: boolean; basis: 'name' | 'headers' | 'user' | 'reuse' | null; scores: Record<string, number> };
   columns: ColumnProposal[];
   missing_required: string[];
   extra: string[];
@@ -292,16 +293,28 @@ export type GroupCell = {
 
 export class ApiError extends Error {
   code: string;
-  constructor(code: string, message: string) {
+  details: Record<string, unknown> | null;
+  constructor(code: string, message: string, details: Record<string, unknown> | null = null) {
     super(message);
     this.code = code;
+    this.details = details;
   }
 }
+export type ReuseImpact = {
+  item_id: number;
+  kind: 'mapping_changed' | 'header_changed';
+  template_id?: number;
+  version?: number;
+  diff?: { column: string; rule: string | null; now: string | null }[];
+  headers?: string[];
+  prior?: { template_id: number; headers: string[]; rules: number }[];
+};
+export type ImpactChoice = 'this_run' | 'new_version';
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api${path}`, init);
   const body = await res.json().catch(() => null);
-  if (!res.ok) throw new ApiError(body?.code ?? 'error', body?.message ?? res.statusText);
+  if (!res.ok) throw new ApiError(body?.code ?? 'error', body?.message ?? res.statusText, body?.details ?? null);
   return body as T;
 }
 
@@ -342,11 +355,11 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ item_id, table }),
     }),
-  confirmMapping: (id: string, files: ({ item_id: number } & Mapping)[]) =>
+  confirmMapping: (id: string, files: ({ item_id: number } & Mapping)[], reuse_impact?: Record<number, ImpactChoice>) =>
     req<Run>(`/runs/${id}/mapping`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ files }),
+      body: JSON.stringify(reuse_impact ? { files, reuse_impact } : { files }),
     }),
   diagnose: (id: string) => req<Diagnosis>(`/runs/${id}/diagnose`, { method: 'POST' }),
   diagnosis: (id: string) => req<Diagnosis>(`/runs/${id}/diagnosis`),

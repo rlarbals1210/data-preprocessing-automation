@@ -134,6 +134,13 @@ def map_columns(table: str, headers: list[str], rows: list[dict[str, str]], cat:
                     if len(shaped) > 1:
                         entry["reasons"].append("shape_tie")
         result.append(entry)
+    return _finish(table, headers, result, cat)
+
+
+def _finish(table: str, headers: list[str], result: list[dict], cat: Catalog) -> dict:
+    """정규화 충돌·일대일 위반·확인 필요·누락 필수·추가 컬럼을 판정한다."""
+    for e in result:
+        e["reasons"] = [r for r in e["reasons"] if r not in ("normalization_collision", "one_to_one")]
     # 정규화 충돌: 서로 다른 원래 헤더가 정규화하면 같다
     norm_count = Counter(norm(h) for h in headers)
     for e in result:
@@ -149,7 +156,7 @@ def map_columns(table: str, headers: list[str], rows: list[dict[str, str]], cat:
             for e in es:
                 e["reasons"].append("one_to_one")
     for e in result:
-        e["needs_confirmation"] = e["grade"] in ("similar", "shape") or bool(e["reasons"])
+        e["needs_confirmation"] = e["grade"] in ("similar", "shape") or bool(e["reasons"])  # exact·alias·reuse만 자동
     mapped = {e["logical"] for e in result if e["logical"]}
     return {
         "columns": result,
@@ -188,3 +195,28 @@ def validate_final(table: str, columns: dict[str, str | None], headers: list[str
     if dup:
         errors.append(f"두 컬럼이 같은 표준 컬럼으로 간다: {dup}")
     return errors
+
+
+def apply_reuse(proposal: dict, headers: list[str], rule: dict, skip: set[str], cat: Catalog) -> dict:
+    """재사용 매핑 규칙을 자동 제안으로 올린다(결정 M6-D2). 같은 양식에서만 부른다.
+
+    rule: {version, spec: {table, columns: 원래 헤더 → 논리 컬럼|None}}. skip: 스키마 변경 감지가 걸린 원래 헤더.
+    규칙에 있는 원래 헤더 중 변경이 없고 지금 표준에 있는 논리 컬럼(또는 미매핑)인 것만 등급 `reuse`가 된다.
+    """
+    table = rule["spec"]["table"]
+    if table not in cat.columns:
+        return proposal
+    known = rule["spec"]["columns"]
+    base = proposal if proposal["table"]["table"] == table else propose("", headers, [], cat, table=table)
+    result = []
+    for e in base["columns"]:
+        e = dict(e, reasons=list(e["reasons"]))
+        h = e["original"]
+        if h in known and h not in skip and (known[h] is None or known[h] in cat.columns[table]):
+            e.update(logical=known[h], grade="reuse", reuse_version=rule["version"],
+                     reasons=[r for r in e["reasons"] if r not in ("similar_tie", "shape_tie")])
+        result.append(e)
+    cols = _finish(table, headers, result, cat)
+    cls = {"table": table, "auto": True, "basis": "reuse", "scores": proposal["table"].get("scores", {})}
+    needs = any(c["needs_confirmation"] for c in cols["columns"])
+    return {"table": cls, **cols, "needs_confirmation": needs}

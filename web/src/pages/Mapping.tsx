@@ -3,7 +3,7 @@ import { IconArrowRight, IconCheck } from '@tabler/icons-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FINISHED, api, type FileEntry, type Mapping as MappingT, type Proposal, type Run } from '../api';
+import { ApiError, FINISHED, api, type FileEntry, type ImpactChoice, type Mapping as MappingT, type Proposal, type ReuseImpact, type Run } from '../api';
 import { GRADE, REASON, TABLE_BASIS, fmt } from '../labels';
 
 const EXCLUDE = '__exclude__';
@@ -24,6 +24,8 @@ export default function Mapping({ run }: { run: Run }) {
   );
   const [drafts, setDrafts] = useState(initial);
   const [warn, setWarn] = useState(false);
+  const [impacts, setImpacts] = useState<ReuseImpact[]>([]);
+  const [choices, setChoices] = useState<Record<number, ImpactChoice>>({});
   const readable = run.files.filter((f) => !f.read_error);
   const dirty = readable.some((f) => !same({ table: drafts[f.item_id].table, columns: drafts[f.item_id].columns }, f.mapping));
   const allConfirmed = run.files.every((f) => f.confirmed);
@@ -52,16 +54,37 @@ export default function Mapping({ run }: { run: Run }) {
     qc.invalidateQueries({ queryKey: ['runs'] });
   };
   const confirm = useMutation({
-    mutationFn: () =>
+    mutationFn: (chosen?: Record<number, ImpactChoice>) =>
       api.confirmMapping(
         run.id,
         readable.map((f) => ({ item_id: f.item_id, table: drafts[f.item_id].table, columns: drafts[f.item_id].columns })),
+        chosen,
       ),
     onSuccess: () => {
       setWarn(false);
+      setImpacts([]);
+      setChoices({});
       invalidate();
     },
+    onError: (e) => {
+      // F03-6: 재사용 규칙 영향 선택(서버가 판정한 영향 목록을 그대로 보여 준다)
+      if (e instanceof ApiError && e.code === 'reuse_impact_needed') {
+        setWarn(false);
+        setImpacts(((e.details?.impacts as ReuseImpact[]) ?? []));
+      }
+    },
   });
+  const keepRule = (i: ReuseImpact) => {
+    setDrafts((d) => ({
+      ...d,
+      [i.item_id]: {
+        ...d[i.item_id],
+        columns: { ...d[i.item_id].columns, ...Object.fromEntries((i.diff ?? []).map((x) => [x.column, x.rule])) },
+      },
+    }));
+    setImpacts((xs) => xs.filter((x) => x.item_id !== i.item_id));
+  };
+  const allChosen = impacts.length > 0 && impacts.every((i) => choices[i.item_id]);
   // 진단·미리보기 뒤 매핑을 바꾸면 그 진단·선택·승인이 무효가 된다(AC-03-5) — 확정 전에 알린다
   const willInvalidate = dirty && ['diagnosed', 'awaiting_approval'].includes(run.status);
   const diagnose = useMutation({
@@ -116,7 +139,7 @@ export default function Mapping({ run }: { run: Run }) {
               leftSection={<IconCheck size={16} />}
               disabled={finished || blocking || (!dirty && allConfirmed)}
               loading={confirm.isPending}
-              onClick={() => (willInvalidate ? setWarn(true) : confirm.mutate())}
+              onClick={() => (willInvalidate ? setWarn(true) : confirm.mutate(undefined))}
             >
               매핑 확정
             </Button>
@@ -138,13 +161,90 @@ export default function Mapping({ run }: { run: Run }) {
             <Button variant="default" onClick={() => setWarn(false)}>
               취소
             </Button>
-            <Button color="orange" loading={confirm.isPending} onClick={() => confirm.mutate()}>
+            <Button color="orange" loading={confirm.isPending} onClick={() => confirm.mutate(undefined)}>
               확정
             </Button>
           </Group>
         </Stack>
       </Modal>
-      {(confirm.error || diagnose.error) && (
+      {impacts.length > 0 && (
+        <Card withBorder data-testid="reuse-impact">
+          <Stack gap="sm">
+            <Text fw={600}>재사용 규칙 영향</Text>
+            {impacts.map((i) => {
+              const f = run.files.find((x) => x.item_id === i.item_id);
+              return (
+                <Stack key={i.item_id} gap={6}>
+                  <Group gap="sm">
+                    <Text fz="sm" fw={600}>
+                      {f?.name}
+                      {f?.sheet ? ` [${f.sheet}]` : ''}
+                    </Text>
+                    <Badge variant="light" color="grape">
+                      {i.kind === 'mapping_changed' ? `매핑 변경 · 규칙 v${i.version}` : '헤더 구성 변경'}
+                    </Badge>
+                  </Group>
+                  {i.kind === 'mapping_changed' ? (
+                    <Table fz="sm" verticalSpacing={2}>
+                      <Table.Thead>
+                        <Table.Tr>
+                          <Table.Th>원래 컬럼</Table.Th>
+                          <Table.Th>규칙</Table.Th>
+                          <Table.Th>지금</Table.Th>
+                        </Table.Tr>
+                      </Table.Thead>
+                      <Table.Tbody>
+                        {(i.diff ?? []).map((x) => (
+                          <Table.Tr key={x.column}>
+                            <Table.Td ff="monospace">{x.column}</Table.Td>
+                            <Table.Td ff="monospace">{x.rule ?? '—'}</Table.Td>
+                            <Table.Td ff="monospace">{x.now ?? '—'}</Table.Td>
+                          </Table.Tr>
+                        ))}
+                      </Table.Tbody>
+                    </Table>
+                  ) : (
+                    <Stack gap={2}>
+                      {(i.prior ?? []).map((p) => (
+                        <Text key={p.template_id} fz="sm" c="dimmed" ff="monospace">
+                          양식 #{p.template_id} · 규칙 {p.rules} · {p.headers.join(', ')}
+                        </Text>
+                      ))}
+                      <Text fz="sm" ff="monospace">
+                        → {(i.headers ?? []).join(', ')}
+                      </Text>
+                    </Stack>
+                  )}
+                  <Group gap="xs">
+                    {i.kind === 'mapping_changed' && (
+                      <Button size="xs" variant="default" onClick={() => keepRule(i)}>
+                        기존 규칙 유지
+                      </Button>
+                    )}
+                    {(['this_run', 'new_version'] as ImpactChoice[]).map((c) => (
+                      <Button
+                        key={c}
+                        size="xs"
+                        variant={choices[i.item_id] === c ? 'filled' : 'light'}
+                        color="grape"
+                        onClick={() => setChoices((s) => ({ ...s, [i.item_id]: c }))}
+                      >
+                        {c === 'this_run' ? '이번만 새 매핑' : '새 규칙 버전 승인'}
+                      </Button>
+                    ))}
+                  </Group>
+                </Stack>
+              );
+            })}
+            <Group justify="flex-end">
+              <Button disabled={!allChosen} loading={confirm.isPending} onClick={() => confirm.mutate(choices)}>
+                매핑 확정
+              </Button>
+            </Group>
+          </Stack>
+        </Card>
+      )}
+      {(confirm.error || diagnose.error) && !(confirm.error instanceof ApiError && confirm.error.code === 'reuse_impact_needed') && (
         <Alert color="red">{((confirm.error || diagnose.error) as Error).message}</Alert>
       )}
       <SimpleGrid cols={{ base: 1, lg: 2 }}>

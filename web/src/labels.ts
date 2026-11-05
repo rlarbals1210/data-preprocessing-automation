@@ -86,6 +86,7 @@ export const when = (iso: string) =>
 export const GRADE: Record<string, { label: string; color: string }> = {
   exact: { label: '정확 일치', color: 'blue' },
   alias: { label: '별칭', color: 'teal' },
+  reuse: { label: '재사용 규칙', color: 'grape' },
   similar: { label: '유사 이름', color: 'orange' },
   shape: { label: '값 모양', color: 'orange' },
   none: { label: '후보 없음', color: 'gray' },
@@ -98,7 +99,7 @@ export const REASON: Record<string, string> = {
   shape_tie: '후보 동률',
 };
 
-export const TABLE_BASIS: Record<string, string> = { name: '이름 일치', headers: '헤더 비율', user: '직접 선택' };
+export const TABLE_BASIS: Record<string, string> = { name: '이름 일치', headers: '헤더 비율', user: '직접 선택', reuse: '재사용 규칙' };
 
 export const where = (
   s?: { file: string | null; record: number; line_start: number | null; line_end: number | null; sheet?: string; sheet_row?: number } | null,

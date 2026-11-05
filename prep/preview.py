@@ -32,6 +32,7 @@ from prep.integrity import provider_overrides
 from prep.mapping import Catalog, propose, validate_final
 from prep.plan import build_plan
 from prep.profile import profile_table
+from prep.reuse_step import ReuseMixin
 from prep.runs import ApprovalError, RunLedger
 from prep.sheets import SheetError, read_source
 from prep.snapshot import SnapshotError, create_snapshot, load_snapshot
@@ -135,7 +136,7 @@ def versions_digest(hashes: dict) -> str:
     return hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
 
 
-class Workspace(_VersionsMixin, DriftMixin):
+class Workspace(_VersionsMixin, DriftMixin, ReuseMixin):
     def __init__(self, root: Path):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
@@ -262,6 +263,7 @@ class Workspace(_VersionsMixin, DriftMixin):
             run["drift"] = None
         else:
             self._check_drift(run)  # M6-4: 매핑 전 스키마 변경 확인(같은 단위의 기준과 비교)
+            self._apply_mapping_reuse(run)  # M6-6a: 같은 양식의 재사용 매핑 규칙을 자동 제안으로(M6-D2)
             self._transition(run, "needs_confirmation", "schema_drift" if run["drift"]["required"] else "mapping")
         self.save(run)
         return run
@@ -324,7 +326,7 @@ class Workspace(_VersionsMixin, DriftMixin):
             raise FlowError("bad_mapping", "제안할 수 없는 파일 또는 테이블")
         return propose(f["name"], f["headers"], self._rows(f), cat, table=table)
 
-    def confirm_mapping(self, run_id: str, files: list[dict]) -> dict:
+    def confirm_mapping(self, run_id: str, files: list[dict], reuse_impact: dict | None = None) -> dict:
         """구조 승인: 사용자가 확인·수정한 매핑을 확정한다. 자동 제안(proposal)은 그대로 둔다(AC-03-2)."""
         run = self.load(run_id)
         self._open(run)
@@ -359,6 +361,7 @@ class Workspace(_VersionsMixin, DriftMixin):
             errors.append("실행 대상 파일이 없다")
         if errors:
             raise FlowError("bad_mapping", "; ".join(errors))
+        impacts = self._check_impacts(run, files, reuse_impact)  # F03-6: 재사용 규칙 영향 선택(M6-6a)
         changed = False
         for x in files:
             f = by_id[x["item_id"]]
@@ -374,6 +377,10 @@ class Workspace(_VersionsMixin, DriftMixin):
             run.update(plan=None, result=None)
             self._transition(run, "needs_confirmation", "mapping_changed")
         self._record_structure(run)  # 실행 대상·매핑 버전·구조 승인(이전 실행 승인은 무효화)
+        run["reuse_impact"] = impacts
+        if impacts:
+            self.store.record_event("run", run["db_run"], "reuse_impact_chosen",
+                                    {k: {"kind": v["kind"], "choice": v["choice"]} for k, v in impacts.items()})
         self.store.record_event("batch", run["batch_id"], "mapping_confirmed",
                                 {"run": run_id, "changed": changed,
                                  "auto_unchanged": all(f["mapping"] == _mapping_of(f["proposal"])
@@ -762,6 +769,9 @@ class Workspace(_VersionsMixin, DriftMixin):
         if not isinstance(groups, list) or not isinstance(items, list) or not all(
                 isinstance(g, str) for g in groups) or not all(isinstance(i, int) for i in items):
             raise FlowError("bad_reuse", "reuse는 {groups: [묶음 ID], mappings: [파일 ID]} 형식이다")
+        # F03-6에서 "새 재사용 규칙 버전 승인"을 고른 파일은 최종 확인 때 매핑 규칙으로 함께 기록한다(M6-D1)
+        items = sorted(set(items) | {int(k) for k, v in (run.get("reuse_impact") or {}).items()
+                                     if v["choice"] == "new_version"})
         if not groups and not items:
             return []
         outside = sorted(set(groups) - set(plan["approved_groups"]))

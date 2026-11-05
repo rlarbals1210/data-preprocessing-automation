@@ -29,10 +29,10 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
 
     @app.exception_handler(FlowError)
     async def flow_error(_: Request, exc: FlowError):
-        details = getattr(exc.__cause__, "mismatched", None)
+        mismatched = getattr(exc.__cause__, "mismatched", None)
+        details = getattr(exc, "details", None) or ({"mismatched": mismatched} if mismatched else None)
         return JSONResponse(status_code=exc.status,
-                            content={"code": exc.code, "message": exc.message,
-                                     "details": {"mismatched": details} if details else None, "location": None})
+                            content={"code": exc.code, "message": exc.message, "details": details, "location": None})
 
     @app.exception_handler(PermissionError)
     async def denied(_: Request, exc: PermissionError):
@@ -110,7 +110,10 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
         files = body.get("files")
         if not isinstance(files, list) or not all(isinstance(x, dict) for x in files):
             raise FlowError("bad_mapping", "files 목록이 필요하다")
-        return ws.confirm_mapping(run_id, files)
+        impact = body.get("reuse_impact")
+        if impact is not None and not isinstance(impact, dict):
+            raise FlowError("bad_mapping", "reuse_impact는 {파일 ID: 'this_run'|'new_version'} 형식이다")
+        return ws.confirm_mapping(run_id, files, impact)
 
     @app.post("/api/runs/{run_id}/diagnose")
     def diagnose(run_id: str):
