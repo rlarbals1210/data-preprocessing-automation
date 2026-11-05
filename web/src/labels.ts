@@ -166,3 +166,10 @@ export const DRIFT_KIND: Record<string, string> = {
   value_range: '값 범위 변화',
   category_new: '범주 새 값',
 };
+export const REUSE_STATE: Record<string, { label: string; color: string }> = {
+  effective: { label: '효력', color: 'grape' },
+  superseded: { label: '이전 버전', color: 'gray' },
+  pending: { label: '미발행', color: 'yellow' },
+  revoked: { label: '승인 취소', color: 'red' },
+};
+export const REUSE_KIND: Record<string, string> = { mapping: '매핑', standardize: '표준화' };

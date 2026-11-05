@@ -10,17 +10,25 @@
   셀의 모든 진단 코드에 대해 같은 묶음 ID의 규칙이 있고, 규칙의 설정 해시·변환 ID가 지금과 같고, 원문 형태 서명이
   규칙의 승인 서명 집합에 있고, 그 컬럼에 스키마 변경이 감지되지 않았을 때(AC-09-2). 규칙이 없는 양식은 지금처럼 전체 선택.
   미리 선택도 최종 확인 없이는 적용되지 않는다(AC-09-3). 보류 셀은 후보가 아니라 처음부터 선택 대상이 아니다.
+- 승인 취소(SC12, M6-7): 다음 실행부터 그 규칙은 쓰이지 않는다(AC-09-4). 준비 중인 실행에도 바로 반영한다 —
+  표준화 규칙: 저장된 적용 계획에서 그 규칙과 맞는 셀을 제외 셀로 돌리고 계획을 다시 기록한다(실행 승인 무효 → 재확인).
+  매핑 규칙: 매핑을 아직 확정하지 않은 실행에서 그 규칙으로 올린 제안을 처음 제안으로 되돌린다.
+  확정된 매핑은 사용자가 확정한 것이므로 그대로 둔다. 끝난 실행과 과거 결과 버전은 바꾸지 않는다.
 """
 
 from __future__ import annotations
 
+import json
+
 from prep import reuse, templates
-from prep.apply import group_id
+from prep.apply import build_apply_plan, group_id
+from prep.apply import candidates as apply_candidates
 from prep.errors import FlowError
-from prep.mapping import apply_reuse
+from prep.mapping import apply_reuse, propose
 from prep.profile import signature
 
 IMPACT_CHOICES = ("this_run", "new_version")
+PREPARED = ("diagnosed", "awaiting_approval")  # 적용 계획이 실행 승인을 기다리는 상태
 
 
 def changed_columns(changes: list[dict]) -> set[str]:
@@ -157,3 +165,88 @@ class ReuseMixin:
         excluded = [list(k) for k in sorted(set(cells) - chosen)
                     if any(group_id(k[0], k[2], c) in approved for c in cells[k]["codes"])]
         return {"view_hash": run["view_hash"], "approved_groups": sorted(approved), "excluded_cells": excluded}
+
+    # ---- 재사용 규칙 목록·승인 취소 (SC12, M6-7) ----
+    def _rule_view(self, r: dict, runs: dict[int, dict]) -> dict:
+        return {"id": r["id"], "kind": r["kind"], "rule_key": r["rule_key"], "version": r["version"],
+                "state": r["state"], "spec": r["spec"], "transform_id": r["transform_id"],
+                "approved_at": r["approved_at"], "run": runs.get(r["approved_in_run"], {}).get("id"),
+                "revoked_at": r["revoked_at"], "revoked_reason": r["revoked_reason"]}
+
+    def reuse_units(self) -> list[dict]:
+        """비교·재사용 단위(출처·표준 테이블·양식)별 규칙 목록 — 규칙이 하나라도 있는 단위만."""
+        runs = self._public_ids()
+        out = []
+        for s in self.store.sources():
+            for t in templates.for_source(self.store, s["id"]):
+                rules = reuse.for_template(self.store, t["id"])
+                if rules:
+                    out.append({"template_id": t["id"], "source": {"id": s["id"], "name": s["name"]},
+                                "table": t["std_table"], "headers": t["headers"],
+                                "rules": [self._rule_view(r, runs) for r in rules]})
+        return out
+
+    def revoke_reuse_rule(self, rule_id: int, reason: str) -> dict:
+        if not isinstance(reason, str) or not reason.strip() or len(reason.strip()) > 500:
+            raise FlowError("bad_revoke", "승인 취소 사유는 1~500자다")
+        if reuse.get(self.store, rule_id) is None:
+            raise FlowError("rule_not_found", "없는 재사용 규칙이다", 404)
+        try:
+            rule = reuse.revoke(self.store, rule_id, reason)
+        except reuse.ReuseError as exc:
+            raise FlowError("not_revocable", str(exc), 409) from exc
+        affected = []
+        for public in sorted(r["id"] for r in self._public_ids().values()):
+            run = self.load(public)
+            if self._revoke_in_run(run, rule):
+                affected.append(run["id"])
+        return {"rule": self._rule_view(rule, self._public_ids()), "runs": affected}
+
+    def _revoke_in_run(self, run: dict, rule: dict) -> bool:
+        tid = rule["template_id"]
+        if rule["kind"] == "mapping":
+            return self._revoke_mapping(run, tid)
+        if run["status"] not in PREPARED:
+            return False
+        path = self.run_dir(run["id"]) / "apply-plan.json"
+        links = templates.for_run(self.store, run["db_run"])
+        items = {i for i, t in links.items() if t == tid}
+        if not path.is_file() or not items:
+            return False  # 계획이 아직 없으면 기본 선택을 만들 때 취소가 이미 반영된다
+        plan = json.loads(path.read_text(encoding="utf-8"))
+        report, blocked = self._report(run["id"]), self._blocked(run["id"])
+        cells, _ = apply_candidates(report, blocked)
+        sigs = set(rule["spec"]["signatures"])
+        off = [k for k in map(tuple, plan["allow"])
+               if (cells[k].get("source") or {}).get("item_id") in items
+               and any(group_id(k[0], k[2], c) == rule["rule_key"] for c in cells[k]["codes"])
+               and signature(cells[k]["before"] or "") in sigs]
+        if not off:
+            return False
+        selection = {"view_hash": run["view_hash"], "approved_groups": plan["approved_groups"],
+                     "excluded_cells": sorted(plan["excluded_cells"] + [list(k) for k in off])}
+        self._store_plan(run, build_apply_plan(report, run["view_hash"], selection, extra_blocked=blocked))
+        self.store.record_event("run", run["db_run"], "reuse_revoked_applied",
+                                {"rule": rule["id"], "deselected": len(off)})
+        return True
+
+    def _revoke_mapping(self, run: dict, template_id: int) -> bool:
+        if run["status"] != "needs_confirmation" or not run.get("drift"):
+            return False
+        cat = self._catalog(run)
+        changed = []
+        for f in run["files"]:
+            e = run["drift"]["items"].get(str(f["item_id"])) or {}
+            p = f.get("proposal")
+            if f["confirmed"] or not p or e.get("template_id") != template_id or p["table"].get("basis") != "reuse":
+                continue
+            f["proposal"] = propose(f["sheet"] or f["name"], f["headers"], self._rows(f), cat)
+            f["mapping"] = {"table": f["proposal"]["table"]["table"],
+                            "columns": {c["original"]: c["logical"] for c in f["proposal"]["columns"]}}
+            changed.append(f["item_id"])
+        if not changed:
+            return False
+        self.save(run)
+        self.store.record_event("run", run["db_run"], "reuse_revoked_applied",
+                                {"template": template_id, "items": changed})
+        return True

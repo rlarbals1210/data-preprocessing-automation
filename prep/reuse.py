@@ -7,6 +7,8 @@
 - 표준화 규칙의 서명은 이번 실행에서 실제로 적용될 셀(승인 묶음·제외 셀 반영 후 허용 셀)의 원문에서 만든다.
   변환 ID = 진단 코드 + (형식 변환·형식 통일이면 그 컬럼의 표준화 정책). 승인 당시 설정 해시를 함께 남긴다.
 - 기록은 덧붙이기만 한다. 규칙 행에서 바꿀 수 있는 것은 승인 취소 표시(한 번)뿐이다(M6-7).
+- 승인 취소는 효력 있는 규칙에만 한다. 그 키는 다음 실행부터 후보가 아니며 이전 버전이 되살아나지 않는다
+  (취소한 버전이 키의 최신 발행 버전으로 남으므로). 과거 결과 버전은 바뀌지 않는다(AC-09-4).
 """
 
 from __future__ import annotations
@@ -129,3 +131,26 @@ def for_template(store: Store, template_id: int) -> list[dict]:
 def effective(store: Store, template_id: int) -> list[dict]:
     """다음 실행에서 미리 선택에 쓸 수 있는 규칙(M6-6이 사용). 키마다 발행된 최신 버전이 취소되지 않았을 때만."""
     return [r for r in for_template(store, template_id) if r["state"] == "effective"]
+
+
+def get(store: Store, rule_id: int) -> dict | None:
+    row = store.conn.execute("SELECT template_id FROM reuse_rule WHERE id = ?", (rule_id,)).fetchone()
+    if row is None:
+        return None
+    return next(r for r in for_template(store, row["template_id"]) if r["id"] == rule_id)
+
+
+def revoke(store: Store, rule_id: int, reason: str) -> dict:
+    """효력 있는 규칙의 승인 취소(한 번, 사유 필수). 취소 event는 DB 트리거가 남긴다."""
+    reason = reason.strip() if isinstance(reason, str) else ""
+    if not reason or len(reason) > 500:
+        raise ReuseError("승인 취소 사유는 1~500자다")
+    rule = get(store, rule_id)
+    if rule is None:
+        raise ReuseError("없는 재사용 규칙이다")
+    if rule["state"] != "effective":
+        raise ReuseError(f"효력 있는 규칙만 승인 취소할 수 있다: {rule['state']}")
+    with store.tx() as c:
+        c.execute("UPDATE reuse_rule SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), revoked_reason = ? "
+                  "WHERE id = ?", (reason, rule_id))
+    return get(store, rule_id)

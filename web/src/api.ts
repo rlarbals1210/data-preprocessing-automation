@@ -293,6 +293,35 @@ export type GroupCell = {
   reasons: { category: Category; code: string }[];
 };
 
+export type ReuseRuleState = 'effective' | 'superseded' | 'pending' | 'revoked';
+export type ReuseRule = {
+  id: number;
+  kind: 'mapping' | 'standardize';
+  rule_key: string;
+  version: number;
+  state: ReuseRuleState;
+  spec: {
+    table: string;
+    columns?: Record<string, string | null>;
+    column?: string;
+    code?: string;
+    transform_id?: string;
+    signatures?: string[];
+  };
+  transform_id: string | null;
+  approved_at: string;
+  run: string | null;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+};
+export type ReuseUnit = {
+  template_id: number;
+  source: { id: number; name: string };
+  table: string;
+  headers: string[];
+  rules: ReuseRule[];
+};
+
 export class ApiError extends Error {
   code: string;
   details: Record<string, unknown> | null;
@@ -332,6 +361,13 @@ export const api = {
   sources: () => req<SourceSummary[]>('/sources'),
   sourceVersions: (sid: number) => req<ResultVersion[]>(`/sources/${sid}/versions`),
   version: (vid: number) => req<VersionDetail>(`/versions/${vid}`),
+  reuseRules: () => req<ReuseUnit[]>('/reuse-rules'),
+  revokeReuseRule: (id: number, reason: string) =>
+    req<{ rule: ReuseRule; runs: string[] }>(`/reuse-rules/${id}/revoke`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason }),
+    }),
   restore: (vid: number) => req<VersionDetail>(`/versions/${vid}/restore`, { method: 'POST' }),
   versionFileUrl: (vid: number, name: string) => `/api/versions/${vid}/files/${encodeURIComponent(name)}`,
   createRun: (files: File[], set: string, source: string) => {

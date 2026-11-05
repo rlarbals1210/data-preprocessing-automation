@@ -140,6 +140,14 @@ def create_app(workspace: Path = WORKSPACE) -> FastAPI:
     def source_row(run_id: str, item_id: int, record: int):
         return ws.source_row(run_id, item_id, record)
 
+    @app.get("/api/reuse-rules")
+    def reuse_rules():
+        return ws.reuse_units()
+
+    @app.post("/api/reuse-rules/{rule_id}/revoke")
+    def revoke_reuse_rule(rule_id: int, body: Annotated[dict | None, Body()] = None):
+        return ws.revoke_reuse_rule(rule_id, (body or {}).get("reason"))
+
     @app.get("/api/runs/{run_id}/preview")
     def preview(run_id: str):
         return ws.changes_preview(run_id)
