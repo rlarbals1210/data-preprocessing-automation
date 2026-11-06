@@ -41,7 +41,9 @@ jobs:
         run: npm run build
 
   e2e:
-    runs-on: ubuntu-latest
+    # ubuntu-latest가 26.04로 바뀐 뒤 고정한 Playwright(1.56)가 브라우저를 설치하지 못한다(2026-11-05부터).
+    # Playwright를 올릴 때까지 지원되는 24.04에 고정한다.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -58,6 +60,6 @@ jobs:
       - name: 빌드
         working-directory: web
         run: npm run build
-      - name: S1 E2E (개발 입력만)
+      - name: E2E (S1·S2·S3·S5·SC03·SC04·SC07·SC12, 개발 입력만)
         working-directory: web
         run: npm run e2e
