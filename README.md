@@ -11,6 +11,7 @@ uv sync                     # .venv 생성(Git 제외), uv.lock 기준
 make hooks                  # 처음 한 번: 커밋 전 경로 검사 훅 설치
 make check                  # 경로 검사 + 린트 + 테스트
 make test                   # = uv run pytest tests (경로를 꼭 tests로 지정)
+make measure-reuse          # 규칙 재사용의 검토 감소 측정(④ 6-1, 개발 입력만·정답 안 읽음)
 ```
 
 커밋 전 훅(`.githooks/pre-commit`)과 CI(`.github/workflows/ci.yml`)는 평가 자료·실행 데이터·생성 보고서·`matrices.json`·심볼릭 링크가 추적되지 않는지 파일 이름과 Git 모드만으로 검사한다(`tools/check_tracked_paths.py`). CI에는 평가 정답이 없다.

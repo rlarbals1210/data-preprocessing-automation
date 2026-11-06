@@ -409,7 +409,7 @@ T-11: workspace 안의 정답 폴더 심볼릭 링크, `../` 경로, 업로드 �
 
 ### 12-3. 개발 환경·테스트·CI
 - Python 3.12(uv, 결정 D3). 의존성: fastapi, uvicorn, pydantic, openpyxl, jinja2 / 개발: pytest, ruff, httpx. Node LTS, npm. `make dev`·`make test`·`make e2e`.
-- 테스트 층: 단위 → 통합(파이프라인·승인 무효화·발행) → 격리(T-11) → E2E(Playwright: S1~S5 + 재고 예제 AC-16-2) → 명령줄 회귀(T-01).
+- 테스트 층: 단위 → 통합(파이프라인·승인 무효화·발행) → 격리(T-11) → E2E(Playwright: S1~S5 + 재고 예제 AC-16-2. M6까지 S1·S2·S3·S5와 SC03·SC04 재사용 영향·SC07 재사용 승인·미리 선택·SC12 승인 취소) → 명령줄 회귀(T-01).
 - CI(GitHub Actions): ruff, pytest, 웹 빌드·타입 검사, Playwright headless. CI에는 평가 정답이 없으므로 채점기는 개발셋 fixture로만 테스트한다.
 
 ---
